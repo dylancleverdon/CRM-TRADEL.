@@ -1,8 +1,11 @@
+import { Browser } from '@capacitor/browser';
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 export interface DesktopBridge {
   http(req: { url: string; method: string; body?: string }): Promise<{ status: number; text: string }>;
   openExternal(url: string): Promise<void>;
+  /** Opens a page in a window docked beside the CRM (newer desktop builds). */
+  openSide?(url: string): Promise<void>;
   version(): Promise<string>;
   checkForUpdate(): Promise<UpdateState>;
   installUpdate(): Promise<void>;
@@ -57,6 +60,22 @@ export async function placeCall(phone: string): Promise<void> {
     return;
   }
   window.location.href = `tel:${num}`;
+}
+
+/**
+ * Opens a web page next to the CRM so it stays visible during a call: a window docked beside the app on the Mac,
+ * an in-app browser tab on Android (back returns to the call), a new tab in a browser.
+ */
+export async function openBeside(url: string): Promise<void> {
+  if (isDesktop()) {
+    const d = window.tradelinkDesktop!;
+    await (d.openSide ? d.openSide(url) : d.openExternal(url));
+    return;
+  }
+  if (isAndroid()) {
+    try { await Browser.open({ url }); return; } catch { /* fall back to the system browser */ }
+  }
+  window.open(url, '_blank');
 }
 
 export function openExternal(url: string) {

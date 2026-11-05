@@ -8,6 +8,7 @@ import { Empty, QualityPill, StatusPill, toast } from '../components/ui';
 import { setLeadStatus, setQueued } from '../lib/actions';
 import { DEFAULT_TRADES, LEAD_STATUSES } from '../lib/constants';
 import { ago, formatPhone, shortDate } from '../lib/format';
+import { presenceMatch } from '../lib/presence';
 import { getSetting, store, useTable } from '../lib/store';
 import type { Lead, LeadStatus } from '../lib/types';
 
@@ -21,6 +22,7 @@ export default function Leads() {
   const [trade, setTrade] = useState('');
   const [quality, setQuality] = useState('');
   const [origin, setOrigin] = useState<'' | 'mine' | 'public'>('');
+  const [presence, setPresence] = useState('');
   const [sort, setSort] = useState<{ k: SortKey; dir: 1 | -1 }>({ k: 'createdAt', dir: -1 });
   const [adding, setAdding] = useState(params.get('new') === '1');
   const [importing, setImporting] = useState(false);
@@ -49,6 +51,7 @@ export default function Leads() {
       .filter((l) => !trade || l.trade === trade)
       .filter((l) => !quality || (quality === 'none' ? !l.quality : l.quality === quality))
       .filter((l) => !origin || (origin === 'public' ? l.origin === 'public' : l.origin !== 'public'))
+      .filter((l) => presenceMatch(l, presence))
       .filter((l) => !ql || [l.company, l.contactName, l.phone, l.city, l.email, l.tags, l.notes].some((x) => (x || '').toLowerCase().includes(ql)))
       .sort((a, b) => {
         const av = (a as any)[sort.k] ?? '', bv = (b as any)[sort.k] ?? '';
@@ -57,7 +60,7 @@ export default function Leads() {
         if (av && !bv) return -1;
         return String(av).localeCompare(String(bv)) * sort.dir;
       });
-  }, [leads, q, tab, trade, quality, origin, sort]);
+  }, [leads, q, tab, trade, quality, origin, presence, sort]);
 
   const th = (k: SortKey, label: string) => (
     <th onClick={() => setSort({ k, dir: sort.k === k ? (-sort.dir as 1 | -1) : 1 })}>{label}{sort.k === k ? (sort.dir === 1 ? ' ↑' : ' ↓') : ''}</th>
@@ -110,6 +113,10 @@ export default function Leads() {
           <select style={{ width: 160 }} value={origin} onChange={(e) => setOrigin(e.target.value as any)}>
             <option value="">All leads</option><option value="mine">Added by me</option><option value="public">Public records</option>
           </select>
+          <select style={{ width: 170 }} value={presence} onChange={(e) => setPresence(e.target.value)} title="What you found on Yelp and Google">
+            <option value="">Any online presence</option><option value="gap">Missing Yelp or Google</option><option value="noYelp">Not on Yelp / unclaimed</option>
+            <option value="noGoogle">Not on Google / unverified</option><option value="unchecked">Not checked yet</option>
+          </select>
         </div>
         {sel.size > 0 && (
           <div className="card row wrap" style={{ padding: 10 }}>
@@ -148,7 +155,7 @@ export default function Leads() {
                       <input type="checkbox" checked={sel.has(l.id)} onChange={(e) => { const s = new Set(sel); e.target.checked ? s.add(l.id) : s.delete(l.id); setSel(s); }} />
                     </td>
                     <td><div className="strong">{l.company}</div><div className="faint" style={{ fontSize: '0.78rem' }}>{l.contactName}</div></td>
-                    <td><div className="row"><StatusPill status={l.status} /><QualityPill q={l.quality} />{l.queuedAt && <span className="pill accent">In queue</span>}</div></td>
+                    <td><div className="row"><StatusPill status={l.status} /><QualityPill q={l.quality} />{l.queuedAt && <span className="pill accent">In queue</span>}<PresencePills l={l} /></div></td>
                     <td>{l.trade}</td>
                     <td>{[l.city, l.state].filter(Boolean).join(', ')}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{formatPhone(l.phone)}</td>
@@ -172,13 +179,21 @@ export default function Leads() {
   );
 }
 
+/** "No Yelp" / "No Google" tags: the best prospects for TradeLink. */
+function PresencePills({ l }: { l: Lead }) {
+  return <>
+    {(l.yelpStatus === 'Not listed' || l.yelpStatus === 'Unclaimed') && <span className="pill warn">{l.yelpStatus === 'Unclaimed' ? 'Yelp unclaimed' : 'No Yelp'}</span>}
+    {(l.googleStatus === 'Not listed' || l.googleStatus === 'Unverified') && <span className="pill warn">{l.googleStatus === 'Unverified' ? 'Google unverified' : 'No Google'}</span>}
+  </>;
+}
+
 function LeadCard({ l, onOpen, onCall }: { l: Lead; onOpen: () => void; onCall: () => void }) {
   return (
     <div className="list-item">
       <div className="grow" onClick={onOpen}>
         <div className="title">{l.company}</div>
         <div className="meta row wrap" style={{ gap: 6, marginTop: 3 }}>
-          <StatusPill status={l.status} /><QualityPill q={l.quality} />{l.queuedAt && <span className="pill accent">In queue</span>}
+          <StatusPill status={l.status} /><QualityPill q={l.quality} />{l.queuedAt && <span className="pill accent">In queue</span>}<PresencePills l={l} />
           <span>{l.trade}{l.city ? ` · ${l.city}` : ''}</span>
         </div>
         <div className="meta" style={{ marginTop: 2 }}>

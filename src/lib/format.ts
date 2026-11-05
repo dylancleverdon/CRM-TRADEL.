@@ -58,6 +58,16 @@ export function fromLocalInput(v: string): string {
   return new Date(v).toISOString();
 }
 
-export function fillTemplate(tpl: string, vars: Record<string, string>) {
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] || `[${k}]`);
+/**
+ * Fills {placeholders}. Missing values show as [name] so gaps are obvious, except `optional` ones, which may be
+ * blank: a line holding only blank optional placeholders is dropped (e.g. {yelp} before the business is checked).
+ */
+export function fillTemplate(tpl: string, vars: Record<string, string>, optional: string[] = []) {
+  const opt = new Set(optional);
+  const lines = tpl.split('\n').filter((line) => {
+    const keys = line.match(/\{(\w+)\}/g)?.map((m) => m.slice(1, -1)) || [];
+    const rest = line.replace(/\{(\w+)\}/g, '').trim();
+    return !(keys.length && !rest && keys.every((k) => opt.has(k) && !vars[k]));
+  });
+  return lines.join('\n').replace(/\{(\w+)\}/g, (_, k) => vars[k] || (opt.has(k) ? '' : `[${k}]`)).replace(/\n{3,}/g, '\n\n');
 }

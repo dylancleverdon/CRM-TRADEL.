@@ -5,6 +5,7 @@ import { useCall } from '../components/CallFlow';
 import { InfoFields, NotesCard, QuickLinks } from '../components/Detail';
 import { Page } from '../components/Layout';
 import { NewOpportunity, OpportunityModal } from '../components/Opportunity';
+import { PresenceCard } from '../components/Presence';
 import { QueueButton } from '../components/QueueButton';
 import { exportCsv, ExportIcon, useIsMobile } from '../components/RecordForm';
 import { TasksPanel } from '../components/Tasks';
@@ -188,6 +189,7 @@ export function ContactDetail() {
             ]} />
             {c.leadId && <div style={{ fontSize: '0.8rem', marginTop: 10 }}><Link to={`/leads/${c.leadId}`}>View original lead</Link></div>}
           </div>
+          <PresenceCard rec={c} entity={entity} />
           <NotesCard value={c.notes} onSave={(v) => save('notes', v)} />
           <button className="btn bad sm" onClick={() => { if (confirm('Delete this contact?')) { store.remove('contacts', c.id); navigate('/contacts'); } }}><Trash2 size={14} /> Delete contact</button>
         </div>

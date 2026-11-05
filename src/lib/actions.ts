@@ -1,5 +1,6 @@
 import { addDays, addHours, setHours, setMinutes, startOfDay } from 'date-fns';
 import { DEFAULT_STAGES, outcomeDef, type StageDef } from './constants';
+import { PRESENCE_FIELDS } from './presence';
 import { getSetting, nowIso, store } from './store';
 import type { Activity, ActivityType, Contact, EntityType, Lead, Opportunity, Quality, Task } from './types';
 
@@ -194,6 +195,7 @@ export function convertLead(lead: Lead): Contact {
     nextFollowUpAt: '',
     notes: lead.notes,
     queuedAt: lead.queuedAt || '',
+    ...Object.fromEntries(PRESENCE_FIELDS.map((k) => [k, lead[k] || ''])),
   });
   store.upsert('leads', { id: lead.id, status: 'Converted', quality: 'good', convertedContactId: contact.id, ...(lead.queuedAt ? { queuedAt: '' } : {}) });
   store

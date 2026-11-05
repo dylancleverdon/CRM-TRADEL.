@@ -160,7 +160,7 @@ function Profile() {
         <Field label="Connects / day"><InlineInput type="number" value={goals.connects} onSave={g('connects')} /></Field>
         <Field label="Meetings / day"><InlineInput type="number" value={goals.meetings} onSave={g('meetings')} /></Field>
         <Field label="Follow-ups / day"><InlineInput type="number" value={goals.followUps} onSave={g('followUps')} /></Field>
-        <Field label="Call script — placeholders: {company} {trade} {city} {name} {myName}" full>
+        <Field label="Call script — placeholders: {company} {trade} {city} {name} {myName} {yelp} {google} ({yelp}/{google} say what you found online, blank until checked)" full>
           <ScriptEditor value={script} />
         </Field>
       </div>

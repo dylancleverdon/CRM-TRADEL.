@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { InfoFields, NotesCard, QuickLinks } from '../components/Detail';
 import { Page } from '../components/Layout';
+import { PresenceCard } from '../components/Presence';
 import { QueueButton } from '../components/QueueButton';
 import { TasksPanel } from '../components/Tasks';
 import { Timeline } from '../components/Timeline';
@@ -99,6 +100,7 @@ export default function LeadDetail() {
             ]} />
             <div className="faint" style={{ fontSize: '0.75rem', marginTop: 10 }}>Added {when(lead.createdAt)} · Updated {when(lead.updatedAt)}</div>
           </div>
+          <PresenceCard rec={lead} entity={entity} />
           {(lead.licenseNo || lead.ubi || lead.origin === 'public') && <PublicRecord lead={lead} />}
           <NotesCard value={lead.notes} onSave={(v) => save('notes', v)} />
           <button className="btn bad sm" onClick={() => { if (confirm('Delete this lead?')) { store.remove('leads', lead.id); navigate('/leads'); } }}><Trash2 size={14} /> Delete lead</button>

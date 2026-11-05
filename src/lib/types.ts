@@ -1,3 +1,5 @@
+import type { Presence } from './presence';
+
 export type TableName = 'leads' | 'contacts' | 'opportunities' | 'activities' | 'tasks' | 'suggestions' | 'settings';
 export const TABLES: TableName[] = ['leads', 'contacts', 'opportunities', 'activities', 'tasks', 'suggestions', 'settings'];
 
@@ -11,7 +13,7 @@ export interface BaseRecord {
 export type LeadStatus = 'New' | 'Attempting' | 'Connected' | 'Qualified' | 'Nurture' | 'Disqualified' | 'Converted';
 export type Quality = '' | 'good' | 'bad';
 
-export interface Lead extends BaseRecord {
+export interface Lead extends BaseRecord, Presence {
   company: string;
   contactName: string;
   phone: string;
@@ -52,7 +54,7 @@ export interface Lead extends BaseRecord {
 
 export type ContactStatus = 'Prospect' | 'Active Client' | 'Past Client';
 
-export interface Contact extends BaseRecord {
+export interface Contact extends BaseRecord, Presence {
   company: string;
   contactName: string;
   title: string;

@@ -6,6 +6,7 @@ import { useCall } from '../components/CallFlow';
 import { NotesCard, QuickLinks } from '../components/Detail';
 import { DeskPhoneToggle } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
+import { PresenceCard } from '../components/Presence';
 import { Empty, Progress, QualityPill, StatusPill, toast } from '../components/ui';
 import { setLeadQuality, setQueued } from '../lib/actions';
 import {
@@ -14,6 +15,7 @@ import {
 } from '../lib/callsession';
 import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_TRADES } from '../lib/constants';
 import { ago, fillTemplate, formatPhone, when } from '../lib/format';
+import { presenceLines } from '../lib/presence';
 import { buildCallQueue, dayStats, dncPhones } from '../lib/queue';
 import { getSetting, store, useSetting, useTable } from '../lib/store';
 import type { Contact, Lead } from '../lib/types';
@@ -129,12 +131,13 @@ export default function CallMode() {
                 <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}><QuickLinks rec={rec} /></div>
               </div>
             </div>
+            <PresenceCard key={`p:${cur.type}:${cur.id}`} rec={rec} entity={{ type: cur.type, id: cur.id }} />
             <NotesCard key={`${cur.type}:${cur.id}`} value={rec.notes} onSave={(v) => store.upsert(cur.type === 'lead' ? 'leads' : 'contacts', { id: cur.id, notes: v } as any)} />
           </div>
           <div className="stack">
             <div className="card">
               <div className="card-head"><StickyNote size={15} /><h3>Script</h3><button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={() => setShowScript(!showScript)}>{showScript ? 'Hide' : 'Show'}</button></div>
-              {showScript && <div className="script">{fillTemplate(script, { company: rec.company, trade: (rec.trade || 'home service').toLowerCase(), city: rec.city || 'your area', name: rec.contactName || 'there', myName: myName || 'me' })}</div>}
+              {showScript && <div className="script">{fillTemplate(script, { company: rec.company, trade: (rec.trade || 'home service').toLowerCase(), city: rec.city || 'your area', name: rec.contactName || 'there', myName: myName || 'me', ...presenceLines(rec) }, ['yelp', 'google'])}</div>}
               <div className="faint" style={{ fontSize: '0.75rem', marginTop: 6 }}>Edit the script in Settings.</div>
             </div>
             <div className="card">

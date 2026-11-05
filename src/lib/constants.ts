@@ -79,6 +79,8 @@ export const DEFAULT_SCRIPT = `Hi, is this the owner of {company}?
 
 This is {myName} with TradeLink - we help {trade} companies in {city} get more booked jobs from Google, Yelp and Local Services Ads.
 
+{yelp} {google}
+
 Quick question: where do most of your new customers come from right now?
 
 [Listen]
