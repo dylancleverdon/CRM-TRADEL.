@@ -34,6 +34,7 @@ var TABLES = {
 
 var DECISIONS = ['Pending', 'Approved', 'Rejected', 'Implemented', 'Duplicate'];
 var SETUP_VERSION = '1';
+var CODE_VERSION = '__CODE_VERSION__'; // stamped with the release version by CI
 
 /** Runs the full setup only once per script version (keeps every sync fast). */
 function ensureSetup_() {
@@ -74,9 +75,14 @@ function handle_(body) {
   try {
     if (body.action === 'ping') {
       setup();
-      return { ok: true, serverTime: Date.now(), tables: Object.keys(TABLES), sheet: SpreadsheetApp.getActive().getName() };
+      return { ok: true, serverTime: Date.now(), tables: Object.keys(TABLES), sheet: SpreadsheetApp.getActive().getName(),
+        codeVersion: CODE_VERSION, loader: typeof TL_CODE_URL !== 'undefined' };
     }
     if (body.action === 'sync') return sync_(body);
+    if (body.action === 'tlReload') {
+      if (typeof tlFetch_ !== 'function') return { ok: false, error: 'Not running through the auto-update loader' };
+      return { ok: true, reloaded: true, bytes: tlFetch_().length };
+    }
     if (body.action === 'callRequest') return callRequest_(body);
     if (body.action === 'callPoll') return callPoll_(body);
     if (body.action === 'reset' && body.confirm === 'YES') return reset_();

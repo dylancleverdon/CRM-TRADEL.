@@ -1,6 +1,6 @@
 import { Check, Copy, Download, RefreshCw, Upload } from 'lucide-react';
 import { useState } from 'react';
-import scriptCode from '../../apps-script/Code.gs?raw';
+import scriptCode from '../../apps-script/Loader.gs?raw';
 import { CallingSettings } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
 import { Field, InlineInput, toast } from '../components/ui';
@@ -71,11 +71,11 @@ function SyncSettings() {
           <div className="card" style={{ background: 'var(--bg-2)' }}>
             <ol style={{ margin: 0, paddingLeft: 18, fontSize: '0.88rem', lineHeight: 1.7 }}>
               <li>Open your Google Sheet <b>CRM Tradelink Data Storage</b>.</li>
-              <li>Click <b>Extensions → Apps Script</b>. Delete the starter code and paste the script (copy button below). Click <b>Save</b>.</li>
-              <li>Click <b>Deploy → New deployment</b>, choose type <b>Web app</b>. Set <i>Execute as</i> = <b>Me</b> and <i>Who has access</i> = <b>Anyone</b>. Click <b>Deploy</b> and allow the permissions (Advanced → Go to project if Google warns you).</li>
+              <li>Click <b>Extensions → Apps Script</b>. Delete the existing code and paste the <b>auto-update loader</b> (copy button below). Click <b>Save</b>. You only ever do this once — after that the sheet updates itself.</li>
+              <li>Click <b>Deploy → Manage deployments → ✏️ → Version: New version</b> (or <b>New deployment → Web app</b> the first time). Set <i>Execute as</i> = <b>Me</b> and <i>Who has access</i> = <b>Anyone</b>. Click <b>Deploy</b> and allow the permissions (Advanced → Go to project if Google warns you).</li>
               <li>Copy the <b>Web app URL</b> and paste it above on <b>both</b> the Mac and the phone app.</li>
             </ol>
-            <button className="btn sm" style={{ marginTop: 10 }} onClick={() => { navigator.clipboard.writeText(scriptCode); toast('Script copied'); }}><Copy size={14} /> Copy Apps Script code</button>
+            <button className="btn sm" style={{ marginTop: 10 }} onClick={() => { navigator.clipboard.writeText(scriptCode); toast('Script copied'); }}><Copy size={14} /> Copy Apps Script loader</button>
           </div>
         )}
       </div>

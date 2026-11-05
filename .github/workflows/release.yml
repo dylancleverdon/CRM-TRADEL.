@@ -108,6 +108,7 @@ jobs:
         run: |
           V="${{ needs.version.outputs.version }}"
           cp scripts/install-mac.sh artifacts/install-mac.sh
+          sed "s/__CODE_VERSION__/$V/" apps-script/Code.gs > artifacts/Code.gs
           printf '{"version":"%s","date":"%s","commit":"%s"}\n' "$V" "$(date -u +%FT%TZ)" "${GITHUB_SHA::7}" > artifacts/latest.json
           ls -la artifacts
       - uses: softprops/action-gh-release@v2
@@ -130,3 +131,12 @@ jobs:
             artifacts/TradeLink-CRM-Installer.pkg
             artifacts/install-mac.sh
             artifacts/latest.json
+            artifacts/Code.gs
+      - name: Push the new sync code to the Google Sheet (auto-update loader)
+        continue-on-error: true
+        run: |
+          URL=$(grep -o "https://script.google.com/macros/s/[^']*/exec" src/lib/sync.ts | head -1)
+          post() { curl -sSL -H 'Content-Type: text/plain' --data "$1" "$URL"; }
+          sleep 5
+          echo "--- reload"; post '{"action":"tlReload"}' | head -c 400; echo
+          echo "--- ping";   post '{"action":"ping"}'     | head -c 400; echo

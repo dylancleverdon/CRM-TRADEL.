@@ -27,11 +27,12 @@ Every push to the repo builds both apps on GitHub Actions and publishes a new re
 
 ## Google Sheet sync (one-time setup)
 1. Open the sheet **CRM Tradelink Data Storage**, then go to **Extensions → Apps Script**.
-2. Paste in the contents of [`apps-script/Code.gs`](apps-script/Code.gs) and click **Save**. You can also copy it from inside the app: Settings → Show setup instructions → Copy.
-3. **Deploy → New deployment → Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Click **Deploy** and approve the permissions.
-4. The apps already have the TradeLink sheet URL built in. To use a different sheet, paste its `/exec` URL into **Settings → Google Sheet sync**.
+2. Delete what's there, paste in [`apps-script/Loader.gs`](apps-script/Loader.gs) (the auto-update loader), and click **Save**.
+3. **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**. On a first deployment, use *Execute as*: **Me** and *Who has access*: **Anyone**. Approve the permissions.
 
-The script creates these tabs: `leads`, `contacts`, `opportunities`, `activities`, `tasks`, `suggestions`, `settings`. You can edit rows directly in the sheet and the changes sync back to the apps. In the `suggestions` tab, use the **decision** dropdown (Pending / Approved / Rejected / Implemented / Duplicate).
+That's the last time you touch Apps Script. The loader downloads the real sync code ([`apps-script/Code.gs`](apps-script/Code.gs)) from the latest GitHub release and runs it. Each release then tells the sheet to reload, so server updates arrive automatically. A backup copy is stored in the script, so syncing keeps working even if GitHub is unreachable.
+
+The apps already have the TradeLink sheet URL built in. The script creates these tabs: `leads`, `contacts`, `opportunities`, `activities`, `tasks`, `suggestions`, `settings`. You can edit rows directly in the sheet and the changes sync back to the apps. In the `suggestions` tab, use the **decision** dropdown.
 
 ## How the CRM is organized
 The structure follows the common HubSpot, Salesforce and Pipedrive model:
