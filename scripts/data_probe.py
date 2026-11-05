@@ -1,48 +1,54 @@
-"""Prints the structure of public WA datasets used for lead sourcing (run on GitHub Actions)."""
+"""Runs the Lead Finder's exact queries against the live public datasets (GitHub Actions)."""
 import json
+import time
 import urllib.parse
 import urllib.request
+
+NAICS = ['23611', '238', '5617', '56162', '81141', '4842', '5621', '562991']
 
 
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "tradelink-crm-probe"})
-    with urllib.request.urlopen(req, timeout=90) as r:
+    with urllib.request.urlopen(req, timeout=120) as r:
         return json.loads(r.read().decode())
 
 
-def arcgis(name, base):
-    print(f"\n==================== {name} {base}")
-    try:
-        svc = get(base + "?f=json")
-        layers = [l["id"] for l in svc.get("layers", [])] or [0]
-        print("  layers:", [(l["id"], l["name"]) for l in svc.get("layers", [])])
-    except Exception as e:  # noqa: BLE001
-        print("  service error", e)
-        layers = [0]
-    for lid in layers[:2]:
-        url = f"{base}/{lid}"
-        try:
-            meta = get(url + "?f=json")
-            print(f"  layer {lid} '{meta.get('name')}' editingInfo.lastEditDate={meta.get('editingInfo', {}).get('lastEditDate')}")
-            fields = [f["name"] for f in meta.get("fields", [])]
-            print("  fields:", fields)
-            print("  count:", get(url + "/query?" + urllib.parse.urlencode({"where": "1=1", "returnCountOnly": "true", "f": "json"})))
-            rows = get(url + "/query?" + urllib.parse.urlencode({"where": "1=1", "outFields": "*", "resultRecordCount": 3, "returnGeometry": "false", "f": "json"}))
-            for f in rows.get("features", []):
-                print("  sample:", json.dumps(f.get("attributes"))[:900])
-            for fld in fields:
-                if any(k in fld.lower() for k in ("naics", "type", "categ", "class", "status", "desc")):
-                    try:
-                        st = get(url + "/query?" + urllib.parse.urlencode({
-                            "where": "1=1", "groupByFieldsForStatistics": fld, "returnGeometry": "false", "f": "json",
-                            "outStatistics": json.dumps([{"statisticType": "count", "onStatisticField": fld, "outStatisticFieldName": "n"}]),
-                            "orderByFields": "n DESC", "resultRecordCount": 50}))
-                        print(f"  top {fld}:", [(x['attributes'].get(fld), x['attributes'].get('n')) for x in st.get("features", [])][:50])
-                    except Exception as e:  # noqa: BLE001
-                        print("  stats error", fld, e)
-        except Exception as e:  # noqa: BLE001
-            print("  layer error", e)
+def socrata(name, domain, ds, params):
+    t = time.time(); rows = []; off = 0; size = 0
+    while True:
+        q = urllib.parse.urlencode({**params, "$limit": 5000, "$offset": off})
+        req = urllib.request.Request(f"https://{domain}/resource/{ds}.json?{q}", headers={"User-Agent": "probe"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            body = r.read(); size += len(body); page = json.loads(body)
+        rows += page; off += 5000
+        if len(page) < 5000: break
+    with_phone = sum(1 for r in rows if (r.get("phonenumber") or r.get("business_phone")))
+    print(f"{name}: {len(rows)} rows, {with_phone} with phone, {size/1e6:.1f} MB, {time.time()-t:.1f}s, pages={off//5000}")
+    print("  sample:", json.dumps(rows[0])[:400] if rows else None)
 
 
-arcgis("Tacoma", "https://services3.arcgis.com/SCwJH1pD8WSn5T5y/arcgis/rest/services/Business_Licenses/FeatureServer")
-arcgis("Bellevue", "https://services1.arcgis.com/EYzEZbDhXZjURPbP/arcgis/rest/services/Business_Licenses_(All)/FeatureServer")
+def arcgis(name, layer, where, fields):
+    t = time.time(); rows = []; off = 0
+    while True:
+        q = urllib.parse.urlencode({"where": where, "outFields": fields, "returnGeometry": "false", "f": "json",
+                                    "resultOffset": off, "resultRecordCount": 2000, "orderByFields": "OBJECTID"})
+        page = get(f"{layer}/query?{q}")
+        if "error" in page: print(name, "ERROR", page["error"]); return
+        feats = [f["attributes"] for f in page.get("features", [])]
+        rows += feats; off += 2000
+        if (len(feats) < 2000 and not page.get("exceededTransferLimit")) or not feats: break
+    print(f"{name}: {len(rows)} rows, {time.time()-t:.1f}s")
+    print("  sample:", json.dumps(rows[0])[:400] if rows else None)
+
+
+socrata("L&I active", "data.wa.gov", "m8qx-ubtq", {
+    "$select": "businessname,contractorlicensenumber,contractorlicensetypecode,contractorlicensetypecodedesc,address1,address2,city,state,zip,phonenumber,licenseeffectivedate,businesstypecodedesc,specialtycode1desc,specialtycode2desc,ubi,primaryprincipalname",
+    "$where": "statuscode='A'", "$order": "contractorlicensenumber"})
+socrata("Seattle home services", "cos-data.seattle.gov", "wnbq-64tb", {
+    "$where": " OR ".join(f"starts_with(naics_code, '{p}')" for p in NAICS), "$order": "city_account_number"})
+arcgis("Bellevue home services", "https://services1.arcgis.com/EYzEZbDhXZjURPbP/arcgis/rest/services/Business_Licenses_(All)/FeatureServer/3",
+       "CancelDate IS NULL AND (" + " OR ".join(f"Naic LIKE '{p}%'" for p in NAICS) + ")",
+       "OBJECTID,BusinessId,LegalEntityName,Dba,Ubi,Naic,LegalEntityType,FirstActivityDate,CancelDate,PhysicalCity")
+arcgis("Tacoma home services", "https://services3.arcgis.com/SCwJH1pD8WSn5T5y/arcgis/rest/services/Business_Licenses/FeatureServer/0",
+       " OR ".join(f"NAICS_Code LIKE '{p}%'" for p in NAICS),
+       "OBJECTID,License_Number,Business_Name,Trade_Name,NAICS_Code,Business_Open_Date,Site_City")
