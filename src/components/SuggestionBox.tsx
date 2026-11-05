@@ -7,6 +7,9 @@ import { StatusPill, toast } from './ui';
 const STOP = new Set('the a an and or to of for in on with is it be can should would add make page this that i we my me have more'.split(' '));
 const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w)));
 
+/** Enter submits; Shift+Enter (or Enter while a keyboard is still composing a word) adds a line. */
+export const submitsOnEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing;
+
 /** Finds earlier suggestions that look similar so things don't get re-decided. */
 export function similarSuggestions(text: string, list: { suggestion: string }[]) {
   const w = words(text);
@@ -51,7 +54,9 @@ export function SuggestionBox({ page }: { page: string }) {
       ) : (
         <div className="col">
           <div className="row"><Lightbulb size={16} color="var(--warn)" /><b style={{ fontSize: '0.9rem' }}>Suggestion for the {page} page</b></div>
-          <textarea autoFocus rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="What would make this page better? It goes into the Suggestions tab of the Google Sheet for review." />
+          <textarea autoFocus rows={3} value={text} onChange={(e) => setText(e.target.value)} enterKeyHint="send"
+            onKeyDown={(e) => { if (submitsOnEnter(e)) { e.preventDefault(); submit(); } }}
+            placeholder="What would make this page better? Press Enter to submit (Shift+Enter for a new line). It goes into the Suggestions tab of the Google Sheet for review." />
           {similar.length > 0 && (
             <div className="card" style={{ background: 'var(--warn-soft)', padding: 10 }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 650, marginBottom: 6 }}>Similar suggestions already exist:</div>

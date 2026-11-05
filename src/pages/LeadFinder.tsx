@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { Page } from '../components/Layout';
+import { QueueButton } from '../components/QueueButton';
 import { exportCsv, ExportIcon, useIsMobile } from '../components/RecordForm';
 import { Empty, StatusPill } from '../components/ui';
 import { DEFAULT_TRADES } from '../lib/constants';
@@ -169,7 +170,7 @@ export default function LeadFinder() {
                     <td style={{ whiteSpace: 'nowrap' }}>{l.phone ? formatPhone(l.phone) : <span className="pill warn">needs phone</span>}{!l.contactName && <div className="faint" style={{ fontSize: '0.72rem' }}>no owner name</div>}</td>
                     <td>{shortDate(l.licenseStart ? l.licenseStart + 'T12:00:00' : '')}</td>
                     <td className="faint" style={{ fontSize: '0.78rem' }}>{l.source}</td>
-                    <td onClick={(e) => e.stopPropagation()}>{l.phone && <button className="btn call sm" onClick={() => startCall({ type: 'lead', id: l.id })}><Phone size={13} /></button>}</td>
+                    <td onClick={(e) => e.stopPropagation()}>{l.phone && <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}><QueueButton compact entity={{ type: 'lead', id: l.id }} queued={!!l.queuedAt} /><button className="btn call sm" onClick={() => startCall({ type: 'lead', id: l.id })}><Phone size={13} /></button></div>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -197,6 +198,7 @@ function FinderCard({ l, onOpen, onCall }: { l: Lead; onOpen: () => void; onCall
         </div>
         <div className="meta">{l.contactName || l.specialty}</div>
       </div>
+      {l.phone && <QueueButton compact entity={{ type: 'lead', id: l.id }} queued={!!l.queuedAt} />}
       {l.phone ? <button className="btn call" onClick={onCall}><Phone size={17} /></button> : <StatusPill status="No phone" />}
     </div>
   );

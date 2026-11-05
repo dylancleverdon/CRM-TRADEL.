@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Page } from '../components/Layout';
-import { similarSuggestions } from '../components/SuggestionBox';
+import { similarSuggestions, submitsOnEnter } from '../components/SuggestionBox';
 import { Empty, Field, InlineInput, Modal, StatusPill } from '../components/ui';
 import { DECISIONS } from '../lib/constants';
 import { when } from '../lib/format';
@@ -67,15 +67,17 @@ function AddSuggestion({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [page, setPage] = useState('General');
   const similar = similarSuggestions(text, all);
+  const save = () => {
+    if (text.trim()) store.upsert('suggestions', { page, suggestion: text.trim(), decision: 'Pending', decisionNotes: '', decidedAt: '' });
+    onClose();
+  };
   return (
     <Modal title="New suggestion" onClose={onClose}
-      footer={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" onClick={() => {
-        if (text.trim()) store.upsert('suggestions', { page, suggestion: text.trim(), decision: 'Pending', decisionNotes: '', decidedAt: '' });
-        onClose();
-      }}>Save</button></>}>
+      footer={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" onClick={save}>Save</button></>}>
       <div className="stack">
         <Field label="Page / area"><input value={page} onChange={(e) => setPage(e.target.value)} /></Field>
-        <Field label="Suggestion"><textarea autoFocus rows={4} value={text} onChange={(e) => setText(e.target.value)} /></Field>
+        <Field label="Suggestion (Enter to save, Shift+Enter for a new line)"><textarea autoFocus rows={4} value={text} onChange={(e) => setText(e.target.value)} enterKeyHint="send"
+          onKeyDown={(e) => { if (submitsOnEnter(e)) { e.preventDefault(); save(); } }} /></Field>
         {similar.map((s: any) => <div key={s.id} className="row" style={{ fontSize: '0.85rem' }}><StatusPill status={s.decision || 'Pending'} />{s.suggestion}</div>)}
       </div>
     </Modal>

@@ -119,6 +119,7 @@ export function logCall(c: CallLog) {
         lastContactedAt: ts,
         lastOutcome: c.outcome,
       };
+      if (lead.queuedAt) patch.queuedAt = ''; // called: done with "My queue"
       if (def?.status && lead.status !== 'Converted') {
         // never downgrade a qualified lead because of a missed call
         const keep = (lead.status === 'Qualified' || lead.status === 'Connected') && def.status === 'Attempting';
@@ -131,10 +132,20 @@ export function logCall(c: CallLog) {
       store.upsert('leads', patch);
     }
   } else if (c.entity.type === 'contact') {
-    store.upsert('contacts', { id: c.entity.id, lastContactedAt: ts, lastOutcome: c.outcome });
+    const contact = store.get('contacts', c.entity.id);
+    store.upsert('contacts', { id: c.entity.id, lastContactedAt: ts, lastOutcome: c.outcome, ...(contact?.queuedAt ? { queuedAt: '' } : {}) });
   }
   if (c.followUp) addTask(c.entity, c.followUpTitle || `Follow up (${c.outcome})`, c.followUp, def?.connected ? 'High' : 'Normal');
   else refreshFollowUp(c.entity);
+}
+
+/**
+ * Add a lead or contact to "My queue" in Call Mode, or take it off. Stored on the record so it syncs:
+ * queue on the Mac, call from the phone. `at` lets a bulk add keep the order you picked.
+ */
+export function setQueued(e: { type: 'lead' | 'contact'; id: string }, on: boolean, at: string = nowIso()) {
+  if (e.type === 'lead') store.upsert('leads', { id: e.id, queuedAt: on ? at : '' });
+  else store.upsert('contacts', { id: e.id, queuedAt: on ? at : '' });
 }
 
 export function setLeadQuality(lead: Lead, quality: Quality, reason = '') {
@@ -182,8 +193,9 @@ export function convertLead(lead: Lead): Contact {
     lastOutcome: lead.lastOutcome,
     nextFollowUpAt: '',
     notes: lead.notes,
+    queuedAt: lead.queuedAt || '',
   });
-  store.upsert('leads', { id: lead.id, status: 'Converted', quality: 'good', convertedContactId: contact.id });
+  store.upsert('leads', { id: lead.id, status: 'Converted', quality: 'good', convertedContactId: contact.id, ...(lead.queuedAt ? { queuedAt: '' } : {}) });
   store
     .list('tasks')
     .filter((t) => t.entityId === lead.id && !t.done)

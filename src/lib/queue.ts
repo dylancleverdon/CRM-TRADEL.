@@ -1,4 +1,4 @@
-import { endOfDay, isToday } from 'date-fns';
+import { isToday } from 'date-fns';
 import { outcomeDef } from './constants';
 import { isNewBusiness } from './leadmap';
 import type { Activity, Contact, Lead, Task } from './types';
@@ -13,27 +13,35 @@ export interface QueueItem {
   task?: Task;
 }
 
+/** Last 10 digits of a phone number, used to match the same number across records. */
+export const phoneKey = (p: string) => (p || '').replace(/\D/g, '').slice(-10);
+
+/** Numbers that must never be called again, from any lead. */
+export function dncPhones(leads: Lead[]): Set<string> {
+  const dnc = new Set<string>();
+  for (const l of leads)
+    if (l.lastOutcome === 'Do Not Call' || l.disqualifyReason === 'Do not call') dnc.add(phoneKey(l.phone));
+  return dnc;
+}
+
 /**
- * Who to call next. Order: overdue/due follow-ups → brand-new leads → leads still being attempted
+ * Who to call next. Order: follow-ups whose time has come → brand-new leads → leads still being attempted
  * (fewest attempts, oldest contact first). Disqualified/converted/nurture leads are skipped unless a follow-up is due.
+ * A follow-up set for later today waits until its time (logging "Busy" no longer puts the lead straight back on top).
  */
-export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[], filters: { trade?: string; maxAttempts?: number } = {}): QueueItem[] {
-  const eod = endOfDay(new Date()).toISOString();
+export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[], filters: { trade?: string; maxAttempts?: number; now?: number } = {}): QueueItem[] {
+  const now = filters.now ?? Date.now();
+  const nowIso = new Date(now).toISOString();
   const due = new Map<string, Task>();
   tasks
-    .filter((t) => !t.done && t.dueAt && t.dueAt <= eod && t.entityId)
+    .filter((t) => !t.done && t.dueAt && t.dueAt <= nowIso && t.entityId)
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt))
     .forEach((t) => !due.has(t.entityId) && due.set(t.entityId, t));
 
   const items: QueueItem[] = [];
   const maxAttempts = filters.maxAttempts ?? 8;
-  const now = Date.now();
-  const key = (p: string) => (p || '').replace(/\D/g, '').slice(-10);
-
-  // Numbers that must never be called again, from any lead or contact.
-  const dnc = new Set<string>();
-  for (const l of leads)
-    if (l.lastOutcome === 'Do Not Call' || l.disqualifyReason === 'Do not call') dnc.add(key(l.phone));
+  const key = phoneKey;
+  const dnc = dncPhones(leads);
   const seenPhones = new Set<string>();
 
   for (const l of leads) {
@@ -50,7 +58,7 @@ export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[]
     if (['Disqualified', 'Converted', 'Nurture', 'Qualified'].includes(l.status)) continue;
     if (l.notListedSince) continue; // no longer in any public list: kept for reference, not called
     if (l.lastContactedAt && isToday(new Date(l.lastContactedAt))) continue;
-    if (l.nextFollowUpAt && l.nextFollowUpAt > eod) continue; // scheduled for later
+    if (l.nextFollowUpAt && l.nextFollowUpAt > nowIso) continue; // scheduled for later
     if ((l.attempts || 0) >= maxAttempts) continue;
     if (seenPhones.has(pk)) continue; // same business listed twice
     seenPhones.add(pk);
@@ -68,7 +76,7 @@ export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[]
       items.push({ type: 'contact', id: c.id, company: c.company, phone: c.phone, reason: `Follow-up: ${task.title}`, priority: -1, task });
   }
   const lastTouch = new Map(leads.map((l) => [l.id, l.lastContactedAt || l.createdAt || '']));
-  return items.sort((a, b) => a.priority - b.priority || (lastTouch.get(a.id) || '').localeCompare(lastTouch.get(b.id) || ''));
+  return items.sort((a, b) => a.priority - b.priority || (lastTouch.get(a.id) || '').localeCompare(lastTouch.get(b.id) || '') || a.id.localeCompare(b.id));
 }
 
 export function dayStats(acts: Activity[]) {

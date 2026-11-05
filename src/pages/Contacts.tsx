@@ -5,6 +5,7 @@ import { useCall } from '../components/CallFlow';
 import { InfoFields, NotesCard, QuickLinks } from '../components/Detail';
 import { Page } from '../components/Layout';
 import { NewOpportunity, OpportunityModal } from '../components/Opportunity';
+import { QueueButton } from '../components/QueueButton';
 import { exportCsv, ExportIcon, useIsMobile } from '../components/RecordForm';
 import { TasksPanel } from '../components/Tasks';
 import { Timeline } from '../components/Timeline';
@@ -146,6 +147,7 @@ export function ContactDetail() {
       sub={<span className="row wrap" style={{ gap: 8 }}><StatusPill status={c.status} /><span>{c.contactName}</span>{c.phone && <span>· {formatPhone(c.phone)}</span>}<span>· last contact {ago(c.lastContactedAt)}</span></span>}
       actions={<>
         <button className="btn" onClick={() => setNewOpp(true)}><Briefcase size={15} /> New opportunity</button>
+        <QueueButton entity={entity} queued={!!c.queuedAt} disabled={!c.phone && !c.queuedAt} />
         <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
         <button className="btn call" disabled={!c.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
       </>}

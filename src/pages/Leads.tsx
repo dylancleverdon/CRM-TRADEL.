@@ -1,11 +1,11 @@
-import { Phone, Plus, Search } from 'lucide-react';
+import { ListPlus, Phone, Plus, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { Page } from '../components/Layout';
 import { exportCsv, ExportIcon, ImportIcon, ImportLeads, LeadForm, useIsMobile } from '../components/RecordForm';
 import { Empty, QualityPill, StatusPill, toast } from '../components/ui';
-import { setLeadStatus } from '../lib/actions';
+import { setLeadStatus, setQueued } from '../lib/actions';
 import { DEFAULT_TRADES, LEAD_STATUSES } from '../lib/constants';
 import { ago, formatPhone, shortDate } from '../lib/format';
 import { getSetting, store, useTable } from '../lib/store';
@@ -65,6 +65,16 @@ export default function Leads() {
 
   const bulk = (action: string) => {
     const ids = Array.from(sel);
+    if (action === 'queue') {
+      // Keep the order you picked them in.
+      const base = Date.now();
+      const callable = ids.filter((id) => store.get('leads', id)?.phone);
+      callable.forEach((id, i) => setQueued({ type: 'lead', id }, true, new Date(base + i).toISOString()));
+      const missing = ids.length - callable.length;
+      toast(`${callable.length} added to your call queue${missing ? ` (${missing} without a phone number skipped)` : ''}`);
+      setSel(new Set());
+      return;
+    }
     if (action === 'delete') {
       if (!confirm(`Delete ${ids.length} leads?`)) return;
       ids.forEach((id) => store.remove('leads', id));
@@ -107,6 +117,7 @@ export default function Leads() {
             <select style={{ width: 180 }} value="" onChange={(e) => e.target.value && bulk(e.target.value)}>
               <option value="">Set status…</option>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
+            <button className="btn sm" onClick={() => bulk('queue')}><ListPlus size={14} /> Add to call queue</button>
             <button className="btn bad sm" onClick={() => bulk('delete')}>Delete</button>
             <button className="btn ghost sm" onClick={() => setSel(new Set())}>Clear</button>
           </div>
@@ -137,7 +148,7 @@ export default function Leads() {
                       <input type="checkbox" checked={sel.has(l.id)} onChange={(e) => { const s = new Set(sel); e.target.checked ? s.add(l.id) : s.delete(l.id); setSel(s); }} />
                     </td>
                     <td><div className="strong">{l.company}</div><div className="faint" style={{ fontSize: '0.78rem' }}>{l.contactName}</div></td>
-                    <td><div className="row"><StatusPill status={l.status} /><QualityPill q={l.quality} /></div></td>
+                    <td><div className="row"><StatusPill status={l.status} /><QualityPill q={l.quality} />{l.queuedAt && <span className="pill accent">In queue</span>}</div></td>
                     <td>{l.trade}</td>
                     <td>{[l.city, l.state].filter(Boolean).join(', ')}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{formatPhone(l.phone)}</td>
@@ -167,7 +178,7 @@ function LeadCard({ l, onOpen, onCall }: { l: Lead; onOpen: () => void; onCall: 
       <div className="grow" onClick={onOpen}>
         <div className="title">{l.company}</div>
         <div className="meta row wrap" style={{ gap: 6, marginTop: 3 }}>
-          <StatusPill status={l.status} /><QualityPill q={l.quality} />
+          <StatusPill status={l.status} /><QualityPill q={l.quality} />{l.queuedAt && <span className="pill accent">In queue</span>}
           <span>{l.trade}{l.city ? ` · ${l.city}` : ''}</span>
         </div>
         <div className="meta" style={{ marginTop: 2 }}>

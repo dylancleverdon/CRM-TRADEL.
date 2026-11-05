@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { InfoFields, NotesCard, QuickLinks } from '../components/Detail';
 import { Page } from '../components/Layout';
+import { QueueButton } from '../components/QueueButton';
 import { TasksPanel } from '../components/Tasks';
 import { Timeline } from '../components/Timeline';
 import { Empty, Field, Modal, StatusPill, toast } from '../components/ui';
@@ -57,6 +58,7 @@ export default function LeadDetail() {
         ) : (
           <button className="btn" onClick={convert}><UserCheck size={15} /> Convert to contact</button>
         )}
+        <QueueButton entity={entity} queued={!!lead.queuedAt} disabled={!lead.phone && !lead.queuedAt} />
         <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
         <button className="btn call" disabled={!lead.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
       </>}
