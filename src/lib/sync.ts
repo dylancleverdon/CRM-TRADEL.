@@ -13,7 +13,7 @@ export interface SyncState {
 const LS_URL = 'tl.syncUrl';
 /** TradeLink's Google Sheet ("CRM Tradelink Data Storage") — used unless another URL is set in Settings. */
 export const DEFAULT_SYNC_URL =
-  'https://script.google.com/macros/s/AKfycbwmZbXvkch8AG8MdvdBjeR0cHbxWcloUoTu2D7PQvlIz-Jx722dsBsbMFRAsgByOO4BFA/exec';
+  'https://script.google.com/macros/s/AKfycbwfy9oIAwRTjv9-va29_ZMvoh0_tXdVFzcu8mZ1ff_NPAITpyKU90VFJaxQpK2oX-7A0w/exec';
 const LS_SINCE = 'tl.syncSince';
 const LS_LAST = 'tl.lastSyncedAt';
 
