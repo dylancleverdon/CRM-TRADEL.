@@ -17,7 +17,8 @@
 var TABLES = {
   leads: ['id', 'company', 'contactName', 'phone', 'altPhone', 'email', 'website', 'trade', 'city', 'state', 'address',
     'source', 'status', 'quality', 'disqualifyReason', 'tags', 'attempts', 'lastContactedAt', 'lastOutcome',
-    'nextFollowUpAt', 'notes', 'convertedContactId', 'createdAt', 'updatedAt', 'deleted', '_serverTime'],
+    'nextFollowUpAt', 'notes', 'convertedContactId', 'createdAt', 'updatedAt', 'deleted', '_serverTime',
+    'origin', 'score', 'licenseNo', 'ubi', 'specialty', 'licenseStart', 'ownership', 'sources', 'naics', 'zip'],
   contacts: ['id', 'company', 'contactName', 'title', 'phone', 'altPhone', 'email', 'website', 'trade', 'city', 'state',
     'address', 'status', 'leadId', 'tags', 'lastContactedAt', 'lastOutcome', 'nextFollowUpAt', 'notes', 'createdAt',
     'updatedAt', 'deleted', '_serverTime'],
@@ -33,7 +34,7 @@ var TABLES = {
 };
 
 var DECISIONS = ['Pending', 'Approved', 'Rejected', 'Implemented', 'Duplicate'];
-var SETUP_VERSION = '1';
+var SETUP_VERSION = '2';
 var CODE_VERSION = '__CODE_VERSION__'; // stamped with the release version by CI
 
 /** Runs the full setup only once per script version (keeps every sync fast). */

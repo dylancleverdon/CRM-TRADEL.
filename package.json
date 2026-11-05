@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "electron:dev": "vite build && electron .",
     "dist:mac": "vite build && electron-builder --mac dir --universal --publish never && bash scripts/package-mac.sh",
-    "android:sync": "vite build && npx cap sync android"
+    "android:sync": "vite build && npx cap sync android",
+    "test": "vitest run"
   },
   "build": {
     "appId": "com.tradelink.crm",
@@ -53,6 +54,7 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
   }
 }

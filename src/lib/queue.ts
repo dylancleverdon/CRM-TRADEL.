@@ -1,5 +1,6 @@
 import { endOfDay, isToday } from 'date-fns';
 import { outcomeDef } from './constants';
+import { isNewBusiness } from './leadmap';
 import type { Activity, Contact, Lead, Task } from './types';
 
 export interface QueueItem {
@@ -26,12 +27,23 @@ export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[]
 
   const items: QueueItem[] = [];
   const maxAttempts = filters.maxAttempts ?? 8;
+  const now = Date.now();
+  const key = (p: string) => (p || '').replace(/\D/g, '').slice(-10);
+
+  // Numbers that must never be called again, from any lead or contact.
+  const dnc = new Set<string>();
+  for (const l of leads)
+    if (l.lastOutcome === 'Do Not Call' || l.disqualifyReason === 'Do not call') dnc.add(key(l.phone));
+  const seenPhones = new Set<string>();
 
   for (const l of leads) {
     if (!l.phone) continue;
+    const pk = key(l.phone);
+    if (dnc.has(pk)) continue;
     if (filters.trade && l.trade !== filters.trade) continue;
     const task = due.get(l.id);
     if (task) {
+      seenPhones.add(pk);
       items.push({ type: 'lead', id: l.id, company: l.company, phone: l.phone, reason: `Follow-up: ${task.title}`, priority: 0 + (task.priority === 'High' ? -0.5 : 0), task });
       continue;
     }
@@ -39,12 +51,19 @@ export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[]
     if (l.lastContactedAt && isToday(new Date(l.lastContactedAt))) continue;
     if (l.nextFollowUpAt && l.nextFollowUpAt > eod) continue; // scheduled for later
     if ((l.attempts || 0) >= maxAttempts) continue;
-    if (l.status === 'New' || !l.attempts) items.push({ type: 'lead', id: l.id, company: l.company, phone: l.phone, reason: 'New lead', priority: 1 });
+    if (seenPhones.has(pk)) continue; // same business listed twice
+    seenPhones.add(pk);
+    const score = l.score ?? 50;
+    const fresh = l.licenseStart && isNewBusiness(l.licenseStart, now);
+    if (l.status === 'New' || !l.attempts)
+      items.push({ type: 'lead', id: l.id, company: l.company, phone: l.phone,
+        reason: fresh ? `NEW business · score ${score}` : l.origin === 'public' ? `${l.trade || 'Lead'} · score ${score}` : 'New lead',
+        priority: (fresh ? 0.9 : 1) + (100 - score) / 1000 });
     else items.push({ type: 'lead', id: l.id, company: l.company, phone: l.phone, reason: `Attempt #${(l.attempts || 0) + 1}`, priority: 2 + (l.attempts || 0) * 0.1 });
   }
   for (const c of contacts) {
     const task = due.get(c.id);
-    if (task && c.phone && (!filters.trade || c.trade === filters.trade))
+    if (task && c.phone && !dnc.has(key(c.phone)) && (!filters.trade || c.trade === filters.trade))
       items.push({ type: 'contact', id: c.id, company: c.company, phone: c.phone, reason: `Follow-up: ${task.title}`, priority: -1, task });
   }
   const lastTouch = new Map(leads.map((l) => [l.id, l.lastContactedAt || l.createdAt || '']));

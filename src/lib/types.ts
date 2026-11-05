@@ -33,6 +33,16 @@ export interface Lead extends BaseRecord {
   nextFollowUpAt: string;
   notes: string;
   convertedContactId: string;
+  // Public-record fields (Lead Finder)
+  origin?: '' | 'public';
+  score?: number;
+  licenseNo?: string;
+  ubi?: string;
+  specialty?: string;
+  licenseStart?: string;
+  ownership?: string;
+  sources?: string;
+  naics?: string;
 }
 
 export type ContactStatus = 'Prospect' | 'Active Client' | 'Past Client';

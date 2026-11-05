@@ -10,6 +10,7 @@ import { Empty, Field, Modal, StatusPill, toast } from '../components/ui';
 import { convertLead, setLeadQuality, setLeadStatus } from '../lib/actions';
 import { DEFAULT_TRADES, DISQUALIFY_REASONS, LEAD_STATUSES, LEAD_STATUS_HELP } from '../lib/constants';
 import { ago, formatPhone, when } from '../lib/format';
+import { openExternal } from '../lib/platform';
 import { getSetting, store, useRecord } from '../lib/store';
 import type { Lead, LeadStatus } from '../lib/types';
 
@@ -91,6 +92,7 @@ export default function LeadDetail() {
             ]} />
             <div className="faint" style={{ fontSize: '0.75rem', marginTop: 10 }}>Added {when(lead.createdAt)} · Updated {when(lead.updatedAt)}</div>
           </div>
+          {(lead.licenseNo || lead.ubi || lead.origin === 'public') && <PublicRecord lead={lead} />}
           <NotesCard value={lead.notes} onSave={(v) => save('notes', v)} />
           <button className="btn bad sm" onClick={() => { if (confirm('Delete this lead?')) { store.remove('leads', lead.id); navigate('/leads'); } }}><Trash2 size={14} /> Delete lead</button>
         </div>
@@ -101,6 +103,28 @@ export default function LeadDetail() {
       </div>
       {badOpen && <BadLeadModal lead={lead} onClose={() => setBadOpen(false)} />}
     </Page>
+  );
+}
+
+function PublicRecord({ lead }: { lead: Lead }) {
+  const isLI = (lead.sources || '').includes('li') && lead.licenseNo;
+  return (
+    <div className="card">
+      <div className="card-head"><h3>Public record</h3>{lead.score != null && <span className="pill accent" style={{ marginLeft: 'auto' }}>Score {lead.score}</span>}</div>
+      <dl className="kv">
+        <dt>Source</dt><dd>{lead.source}</dd>
+        {lead.specialty && <><dt>Specialty</dt><dd>{lead.specialty}</dd></>}
+        {lead.ownership && <><dt>Business type</dt><dd>{lead.ownership}</dd></>}
+        {lead.licenseStart && <><dt>Licensed since</dt><dd>{lead.licenseStart}</dd></>}
+        {lead.licenseNo && <><dt>License #</dt><dd>{lead.licenseNo}</dd></>}
+        {lead.ubi && <><dt>State UBI</dt><dd>{lead.ubi}</dd></>}
+      </dl>
+      <div className="row wrap" style={{ marginTop: 10 }}>
+        {isLI && <button className="btn sm" onClick={() => openExternal(`https://secure.lni.wa.gov/verify/Detail.aspx?LIC=${encodeURIComponent(lead.licenseNo!)}`)}>L&I license page</button>}
+        <button className="btn sm" onClick={() => openExternal(`https://www.google.com/search?q=${encodeURIComponent(`${lead.company} ${lead.city || ''} WA`)}`)}>Google it</button>
+      </div>
+      {!lead.updatedAt && <div className="faint" style={{ fontSize: '0.75rem', marginTop: 8 }}>From public records — saved to your sheet as soon as you call, note or edit it.</div>}
+    </div>
   );
 }
 

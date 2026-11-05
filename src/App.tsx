@@ -7,6 +7,7 @@ import CallMode from './pages/CallMode';
 import { ContactDetail, ContactsList } from './pages/Contacts';
 import Dashboard from './pages/Dashboard';
 import LeadDetail from './pages/LeadDetail';
+import LeadFinder from './pages/LeadFinder';
 import Leads from './pages/Leads';
 import Pipeline from './pages/Pipeline';
 import Settings from './pages/Settings';
@@ -14,7 +15,7 @@ import Suggestions from './pages/Suggestions';
 import TasksPage from './pages/TasksPage';
 
 const PAGE_NAMES: [RegExp, string][] = [
-  [/^\/$/, 'Dashboard'], [/^\/call/, 'Call Mode'], [/^\/leads\/.+/, 'Lead Detail'], [/^\/leads/, 'Leads'],
+  [/^\/$/, 'Dashboard'], [/^\/call/, 'Call Mode'], [/^\/leads\/.+/, 'Lead Detail'], [/^\/leads/, 'Leads'], [/^\/finder/, 'Lead Finder'],
   [/^\/contacts\/.+/, 'Contact Detail'], [/^\/contacts/, 'Contacts'], [/^\/pipeline/, 'Pipeline'], [/^\/tasks/, 'Follow-ups'],
   [/^\/suggestions/, 'Suggestions'], [/^\/settings/, 'Settings'],
 ];
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/call" element={<CallMode />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/leads/:id" element={<LeadDetail />} />
+            <Route path="/finder" element={<LeadFinder />} />
             <Route path="/contacts" element={<ContactsList />} />
             <Route path="/contacts/:id" element={<ContactDetail />} />
             <Route path="/pipeline" element={<Pipeline />} />

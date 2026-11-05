@@ -35,7 +35,7 @@ export default function Dashboard() {
     const qualified = todayActs.filter((a) => a.type === 'status' && /GOOD|→ Qualified/.test(a.outcome)).length;
     const disq = todayActs.filter((a) => a.type === 'status' && /BAD|→ Disqualified/.test(a.outcome)).length;
     const converted = todayActs.filter((a) => a.type === 'converted' && a.entityType === 'lead').length;
-    const newLeads = leads.filter((l) => (l.createdAt || '') >= sod).length;
+    const newLeads = leads.filter((l) => l.origin !== 'public' && (l.createdAt || '') >= sod).length;
     const newOpps = opps.filter((o) => (o.createdAt || '') >= sod).length;
     const openOpps = opps.filter((o) => !isClosed(o.stage));
     const mrr = openOpps.reduce((x, o) => x + (o.monthlyValue || 0), 0);

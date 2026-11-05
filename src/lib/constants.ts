@@ -33,10 +33,12 @@ export const DEFAULT_STAGES: StageDef[] = [
 export const DEFAULT_SERVICES = ['Yelp Ads', 'SEO / Google Business Profile', 'Google Ads / LSA', 'Social Media', 'Review Generation', 'Other'];
 
 export const DEFAULT_TRADES = [
-  'HVAC', 'Plumbing', 'Electrical', 'Roofing', 'Landscaping', 'Lawn Care', 'Pest Control', 'Cleaning',
-  'Carpet Cleaning', 'Pressure Washing', 'Painting', 'Remodeling', 'Handyman', 'Garage Doors', 'Pool Service',
-  'Tree Service', 'Fencing', 'Concrete', 'Flooring', 'Windows & Doors', 'Solar', 'Appliance Repair', 'Junk Removal',
-  'Moving', 'Locksmith', 'Other',
+  'HVAC', 'Plumbing', 'Plumbing & HVAC', 'Electrical', 'Roofing', 'General Contractor', 'Remodeling', 'Landscaping',
+  'Lawn Care', 'Tree Service', 'Pest Control', 'Cleaning', 'Carpet Cleaning', 'Pressure Washing', 'Painting', 'Handyman',
+  'Garage Doors', 'Pool Service', 'Fencing', 'Concrete', 'Masonry', 'Paving', 'Flooring', 'Tile & Stone',
+  'Cabinets & Carpentry', 'Drywall', 'Insulation', 'Siding', 'Gutters', 'Windows & Doors', 'Window Coverings',
+  'Excavation', 'Septic & Sewer', 'Well & Pump', 'Irrigation', 'Fireplace & Stoves', 'Solar', 'Appliance Repair',
+  'Junk Removal', 'Moving', 'Locksmith', 'Demolition', 'Commercial / Industrial', 'Other',
 ];
 
 export const LOST_REASONS = ['Price', 'Went with competitor', 'No decision / ghosted', 'Timing', 'Not a fit', 'Other'];

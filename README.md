@@ -34,6 +34,14 @@ That's the last time you touch Apps Script. The loader downloads the real sync c
 
 The apps already have the TradeLink sheet URL built in. The script creates these tabs: `leads`, `contacts`, `opportunities`, `activities`, `tasks`, `suggestions`, `settings`. You can edit rows directly in the sheet and the changes sync back to the apps. In the `suggestions` tab, use the **decision** dropdown.
 
+## Lead Finder (public records)
+The **Lead Finder** page downloads every licensed home-service business in Washington from public open data:
+- **WA L&I contractor registry:** about 76k active contractors, with phone numbers and owner names.
+- **Seattle business licenses:** about 10k home-service businesses, with phone numbers.
+- **Bellevue** (about 7.7k) and **Tacoma** (about 5.2k) business licenses: no phone numbers, but matched to the other sources by state business ID.
+
+Each business is scored 0–100, and they all appear in Leads and Call Mode. A business is written to the Google Sheet only once you call, note or edit it. The data refreshes weekly.
+
 ## How the CRM is organized
 The structure follows the common HubSpot, Salesforce and Pipedrive model:
 - **Leads.** Unqualified businesses you're cold calling. Status goes New → Attempting → Connected → Qualified / Nurture / Disqualified → Converted. Each lead can be marked 👍 good or 👎 bad, with a reason.

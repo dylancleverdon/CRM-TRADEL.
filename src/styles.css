@@ -260,6 +260,9 @@ td .strong { font-weight: 600; color: var(--text); }
 .quality-toggle button.on.good { background: var(--good); color: #fff; }
 .quality-toggle button.on.bad { background: var(--bad); color: #fff; }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; font-size: 0.88rem; }
 .kv dt { color: var(--text-3); }
 .kv dd { margin: 0; overflow-wrap: anywhere; }

@@ -1,5 +1,5 @@
 import { isPast } from 'date-fns';
-import { Briefcase, CheckSquare, Contact2, Gauge, Lightbulb, Menu, PhoneCall, RefreshCw, Settings, Users } from 'lucide-react';
+import { Briefcase, CheckSquare, Contact2, Gauge, Lightbulb, Menu, PhoneCall, RefreshCw, Search, Settings, Users } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { isDesktop } from '../lib/platform';
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/', label: 'Today', icon: Gauge, end: true },
   { to: '/call', label: 'Call Mode', icon: PhoneCall },
   { to: '/leads', label: 'Leads', icon: Users },
+  { to: '/finder', label: 'Lead Finder', icon: Search },
   { to: '/contacts', label: 'Contacts', icon: Contact2 },
   { to: '/pipeline', label: 'Pipeline', icon: Briefcase },
   { to: '/tasks', label: 'Follow-ups', icon: CheckSquare, badge: true },

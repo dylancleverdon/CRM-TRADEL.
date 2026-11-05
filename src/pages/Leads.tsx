@@ -20,6 +20,7 @@ export default function Leads() {
   const [tab, setTab] = useState<'Open' | LeadStatus | 'All'>('Open');
   const [trade, setTrade] = useState('');
   const [quality, setQuality] = useState('');
+  const [origin, setOrigin] = useState<'' | 'mine' | 'public'>('');
   const [sort, setSort] = useState<{ k: SortKey; dir: 1 | -1 }>({ k: 'createdAt', dir: -1 });
   const [adding, setAdding] = useState(params.get('new') === '1');
   const [importing, setImporting] = useState(false);
@@ -47,6 +48,7 @@ export default function Leads() {
       .filter((l) => tab === 'All' || (tab === 'Open' ? !['Disqualified', 'Converted'].includes(l.status) : l.status === tab))
       .filter((l) => !trade || l.trade === trade)
       .filter((l) => !quality || (quality === 'none' ? !l.quality : l.quality === quality))
+      .filter((l) => !origin || (origin === 'public' ? l.origin === 'public' : l.origin !== 'public'))
       .filter((l) => !ql || [l.company, l.contactName, l.phone, l.city, l.email, l.tags, l.notes].some((x) => (x || '').toLowerCase().includes(ql)))
       .sort((a, b) => {
         const av = (a as any)[sort.k] ?? '', bv = (b as any)[sort.k] ?? '';
@@ -55,7 +57,7 @@ export default function Leads() {
         if (av && !bv) return -1;
         return String(av).localeCompare(String(bv)) * sort.dir;
       });
-  }, [leads, q, tab, trade, quality, sort]);
+  }, [leads, q, tab, trade, quality, origin, sort]);
 
   const th = (k: SortKey, label: string) => (
     <th onClick={() => setSort({ k, dir: sort.k === k ? (-sort.dir as 1 | -1) : 1 })}>{label}{sort.k === k ? (sort.dir === 1 ? ' ↑' : ' ↓') : ''}</th>
@@ -94,6 +96,9 @@ export default function Leads() {
           <select style={{ width: 160 }} value={trade} onChange={(e) => setTrade(e.target.value)}><option value="">All trades</option>{trades.map((t) => <option key={t}>{t}</option>)}</select>
           <select style={{ width: 140 }} value={quality} onChange={(e) => setQuality(e.target.value)}>
             <option value="">Any quality</option><option value="good">👍 Good</option><option value="bad">👎 Bad</option><option value="none">Not rated</option>
+          </select>
+          <select style={{ width: 160 }} value={origin} onChange={(e) => setOrigin(e.target.value as any)}>
+            <option value="">All leads</option><option value="mine">Added by me</option><option value="public">Public records</option>
           </select>
         </div>
         {sel.size > 0 && (

@@ -4,7 +4,7 @@ import { TABLES, type RecordMap, type TableName } from './types';
 
 type AnyRec = Record<string, any> & { id: string; updatedAt: string };
 
-const NUMERIC = new Set(['attempts', 'monthlyValue', 'setupFee', 'probability', 'durationSec']);
+const NUMERIC = new Set(['attempts', 'monthlyValue', 'setupFee', 'probability', 'durationSec', 'score']);
 const BOOL = new Set(['done', 'deleted']);
 
 export const uid = () =>
@@ -33,6 +33,16 @@ class Store {
   private saveTimer: any = null;
   private cache = new Map<string, { v: number; list: any[] }>();
   onLocalChange: (() => void) | null = null;
+  /**
+   * Public-record businesses (Lead Finder) that act as leads without living in the sheet.
+   * A virtual lead becomes a real, synced lead the first time it is changed (called, noted, etc.).
+   */
+  virtualLeads: Map<string, AnyRec> = new Map();
+
+  setVirtualLeads(map: Map<string, AnyRec>) {
+    this.virtualLeads = map;
+    this.emit();
+  }
 
   async load() {
     for (const t of TABLES) {
@@ -71,22 +81,30 @@ class Store {
     const key = t + (includeDeleted ? ':all' : '');
     const c = this.cache.get(key);
     if (c && c.v === this.version) return c.list;
-    const list = Array.from(this.data[t].values()).filter((r) => includeDeleted || !r.deleted) as any[];
+    let list = Array.from(this.data[t].values()).filter((r) => includeDeleted || !r.deleted) as any[];
+    if (t === 'leads' && this.virtualLeads.size) {
+      const real = this.data.leads;
+      const extra: AnyRec[] = [];
+      for (const [id, v] of this.virtualLeads) if (!real.has(id)) extra.push(v);
+      list = list.concat(extra);
+    }
     this.cache.set(key, { v: this.version, list });
     return list;
   }
 
   get<T extends TableName>(t: T, id: string | undefined): RecordMap[T] | undefined {
     if (!id) return undefined;
-    const r = this.data[t].get(id);
+    const r = this.data[t].get(id) || (t === 'leads' ? this.virtualLeads.get(id) : undefined);
     return r && !r.deleted ? (r as any) : undefined;
   }
 
   upsert<T extends TableName>(t: T, rec: Partial<RecordMap[T]> & { id?: string }): RecordMap[T] {
     const id = rec.id || uid();
-    const existing = this.data[t].get(id);
+    const existing = this.data[t].get(id) || (t === 'leads' ? this.virtualLeads.get(id) : undefined);
     const ts = nowIso();
-    const merged = { ...(existing || { createdAt: ts }), ...rec, id, updatedAt: ts } as AnyRec;
+    const base: AnyRec = existing ? { ...existing } : ({} as AnyRec);
+    if (!base.createdAt) base.createdAt = ts;
+    const merged = { ...base, ...rec, id, updatedAt: ts } as AnyRec;
     this.data[t].set(id, merged);
     this.dirty[t].add(id);
     this.emit();
@@ -96,7 +114,7 @@ class Store {
   }
 
   remove(t: TableName, id: string) {
-    if (this.data[t].has(id)) this.upsert(t, { id, deleted: true } as any);
+    if (this.data[t].has(id) || (t === 'leads' && this.virtualLeads.has(id))) this.upsert(t, { id, deleted: true } as any);
   }
 
   /** Apply records coming from the server. Local unsynced edits that are newer win. */

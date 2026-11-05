@@ -55,8 +55,18 @@ jobs:
           if post '{"action":"callPoll"}' | grep -q '"ok":true'; then echo "RING_PHONE_READY"; else echo "RING_PHONE_NEEDS_SCRIPT_UPDATE (paste the latest apps-script/Code.gs and deploy a new version)"; fi
           if grep -q '"ok":true' ping.json && grep -q "$NOW" read.json; then echo "SYNC_CHECK_PASSED"; else echo "SYNC_CHECK_FAILED"; exit 1; fi
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+
   android:
-    needs: version
+    needs: [version, test]
     runs-on: ubuntu-latest
     env:
       VERSION_NAME: ${{ needs.version.outputs.version }}
@@ -80,7 +90,7 @@ jobs:
         with: { name: android, path: TradeLink-CRM.apk }
 
   mac:
-    needs: version
+    needs: [version, test]
     runs-on: macos-latest
     env:
       APP_VERSION: ${{ needs.version.outputs.version }}

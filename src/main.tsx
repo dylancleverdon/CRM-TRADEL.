@@ -4,6 +4,7 @@ import App from './App';
 import { store } from './lib/store';
 import { startAutoSync } from './lib/sync';
 import { startDeskPhone } from './lib/deskphone';
+import { startLeadSources } from './lib/leadsources';
 import { applyTheme } from './lib/theme';
 import { startUpdateChecks } from './lib/updater';
 import './styles.css';
@@ -19,4 +20,5 @@ store.load().then(() => {
   startAutoSync();
   startUpdateChecks();
   startDeskPhone();
+  startLeadSources();
 });
