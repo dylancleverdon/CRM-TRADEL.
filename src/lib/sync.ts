@@ -13,7 +13,7 @@ export interface SyncState {
 const LS_URL = 'tl.syncUrl';
 /** TradeLink's Google Sheet ("CRM Tradelink Data Storage") — used unless another URL is set in Settings. */
 export const DEFAULT_SYNC_URL =
-  'https://script.google.com/macros/s/AKfycbwfy9oIAwRTjv9-va29_ZMvoh0_tXdVFzcu8mZ1ff_NPAITpyKU90VFJaxQpK2oX-7A0w/exec';
+  'https://script.google.com/macros/s/AKfycbwfcYLWddHT-9JJ4-TcWJkTucaQUzKsQ8aAp5hg_jbyrlSYC5B16ZOxMZfd9WLRacC4Jw/exec';
 const LS_SINCE = 'tl.syncSince';
 const LS_LAST = 'tl.lastSyncedAt';
 
@@ -38,7 +38,15 @@ export const useSyncState = () =>
     () => state,
   );
 
-export const getSyncUrl = () => localStorage.getItem(LS_URL) || DEFAULT_SYNC_URL;
+/** Earlier TradeLink deployments; a device that saved one of these is moved to the current one. */
+const RETIRED_URLS = [
+  'https://script.google.com/macros/s/AKfycbwmZbXvkch8AG8MdvdBjeR0cHbxWcloUoTu2D7PQvlIz-Jx722dsBsbMFRAsgByOO4BFA/exec',
+  'https://script.google.com/macros/s/AKfycbwfy9oIAwRTjv9-va29_ZMvoh0_tXdVFzcu8mZ1ff_NPAITpyKU90VFJaxQpK2oX-7A0w/exec',
+];
+export const getSyncUrl = () => {
+  const saved = localStorage.getItem(LS_URL);
+  return saved && !RETIRED_URLS.includes(saved.trim()) ? saved : DEFAULT_SYNC_URL;
+};
 export function setSyncUrl(url: string) {
   const clean = url.trim();
   if (clean) localStorage.setItem(LS_URL, clean);
