@@ -38,6 +38,11 @@ jobs:
           URL=$(grep -o "https://script.google.com/macros/s/[^']*/exec" src/lib/sync.ts | head -1)
           post() { curl -sSL -H 'Content-Type: text/plain' --data "$1" "$URL"; }
           echo "Endpoint: $URL"
+          echo "--- diagnostics (GET)"
+          curl -sSL -o get.html -w "final_url=%{url_effective} http=%{http_code}\n" "$URL?action=ping" || true
+          grep -o '<title>[^<]*</title>' get.html || true
+          sed -e 's/<[^>]*>/ /g' get.html | tr -s ' \n' ' ' | grep -o -i -E '(script function not found[^.]*|sign in[^.]{0,80}|page not found[^.]{0,80}|sorry[^.]{0,120}|authorization is required[^.]*|exception[^.]{0,200})' | head -5 || true
+          head -c 300 get.html | grep -q '^{' && head -c 600 get.html; echo
           echo "--- ping"
           post '{"action":"ping"}' | tee ping.json | head -c 1500; echo
           NOW=$(date -u +%FT%T.000Z)
