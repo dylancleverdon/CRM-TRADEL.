@@ -5,7 +5,8 @@
  * GitHub release of dylancleverdon/CRM-TRADEL. and runs it, so updates to the CRM reach the
  * sheet automatically (within ~10 minutes, or right after each release).
  *
- * Permissions it uses: this spreadsheet, and internet access to download Code.gs from GitHub.
+ * Permissions it uses: this spreadsheet, and internet access to download Code.gs from GitHub
+ * (both named in tlPermissions_ at the bottom so Google asks for them).
  * (Features that need more — e.g. Gmail — will ask you to approve that separately.)
  *
  * Setup:
@@ -96,4 +97,14 @@ function onEdit(e) {
 /** Run this from the editor if you ever want to force an update right away. */
 function updateNow() {
   Logger.log('Updated TradeLink code: ' + tlFetch_().length + ' bytes');
+}
+
+/**
+ * Never called. Google decides which permissions to request by scanning the code pasted here,
+ * and the downloaded code is not scanned — so the services the CRM uses must be named here:
+ * this spreadsheet (SpreadsheetApp) and downloading updates (UrlFetchApp).
+ */
+function tlPermissions_() {
+  SpreadsheetApp.getActive();
+  UrlFetchApp.fetch(TL_CODE_URL);
 }
