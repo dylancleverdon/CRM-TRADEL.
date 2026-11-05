@@ -2,6 +2,18 @@
 
 This plan reviews the 10 suggestions in the `suggestions` tab of **CRM Tradelink Data Storage**, plus two requests made in chat: Yelp **and** Google presence, and a new call outcome. Each decision is written to the sheet's **decision** column with a short note.
 
+## Status: built the same day
+
+| Plan | What | Release |
+|---|---|---|
+| H | "Warm – Not Ready Yet" call outcome | v1.0.20 |
+| A, B | Locked call queue, My queue, follow-up timing fix; Enter submits suggestions | v1.0.21 |
+| C (phase 1) | Yelp and Google online presence | v1.0.22 |
+| D, E (phase 1), F | Posted notes; script editing per lead; several services per opportunity | v1.0.23 (building) |
+| G | Save called numbers to the phone's contacts (Android) | v1.0.24 (building) |
+
+Still open, as planned: C phase 2 (automatic Google check: needs a Google Cloud API key) and E phase 2 (script library picked automatically per lead).
+
 ## Decisions
 
 | Sheet row | Page | Suggestion | Decision | Plan |
