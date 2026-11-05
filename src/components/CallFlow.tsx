@@ -7,6 +7,7 @@ import { CALL_OUTCOMES, DEFAULT_SERVICES } from '../lib/constants';
 import { duration, formatPhone, fromLocalInput, toLocalInput } from '../lib/format';
 import { getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
 import { isAndroid, isDesktop, placeCall } from '../lib/platform';
+import { saveCalledNumber } from '../lib/phonecontacts';
 import { serviceList, toggleService } from '../lib/services';
 import { getSetting, store } from '../lib/store';
 import { Field, Modal, toast } from './ui';
@@ -136,6 +137,7 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
       startedAt: call.startedAt,
     });
     toast(`Logged: ${outcome}`);
+    saveCalledNumber(call.entity, call.phone, outcome).then((m) => m && toast(m));
     if (outcome === 'Meeting Booked' && call.entity.type === 'lead' && convert) {
       const lead = store.get('leads', call.entity.id);
       if (lead) {

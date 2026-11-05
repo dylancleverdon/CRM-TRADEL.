@@ -3,6 +3,7 @@
  * Mac  -> callRequest (stored in the Apps Script) -> phone polls every 3s -> phone dials.
  */
 import { useSyncExternalStore } from 'react';
+import { saveCalledNumber } from './phonecontacts';
 import { httpRequest, isAndroid, isDesktop, Native, placeCall } from './platform';
 import { getSyncUrl } from './sync';
 
@@ -69,6 +70,7 @@ async function pollOnce() {
       localStorage.setItem(LS_HANDLED, req.id);
       set({ lastCall: `${req.name || req.number} · ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` });
       await placeCall(req.number);
+      saveCalledNumber({ type: req.entityType, id: req.entityId }, req.number, null, false).catch(() => {});
       script({ action: 'callPoll', phone: true, ack: req.id }).catch(() => {});
     }
   } catch (e: any) {

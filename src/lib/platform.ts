@@ -24,6 +24,10 @@ interface NativePlugin {
   http(opts: { url: string; method: string; body?: string }): Promise<{ status: number; text: string }>;
   installApk(opts: { url: string }): Promise<{ status: string }>;
   keepAwake(opts: { on: boolean }): Promise<void>;
+  saveContact(opts: { name: string; company: string; phone: string; title?: string; note?: string; account?: string; group?: string }):
+    Promise<{ status: 'saved' | 'saved-on-phone' | 'exists'; name?: string; account?: string }>;
+  listAccounts(): Promise<{ accounts: string[] }>;
+  checkPermissions(): Promise<{ call?: string; contacts?: string }>;
   addListener(event: 'downloadProgress', cb: (d: { progress: number }) => void): Promise<PluginListenerHandle>;
 }
 

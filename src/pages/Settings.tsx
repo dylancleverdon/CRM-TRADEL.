@@ -6,7 +6,8 @@ import { Page } from '../components/Layout';
 import { Field, InlineInput, toast } from '../components/ui';
 import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_SERVICES, DEFAULT_STAGES, DEFAULT_TRADES, GITHUB_REPO, type StageDef } from '../lib/constants';
 import { ago } from '../lib/format';
-import { platformName } from '../lib/platform';
+import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
+import { isAndroid, Native, platformName } from '../lib/platform';
 import { setSetting, store, useSetting } from '../lib/store';
 import { cleanServiceName } from '../lib/services';
 import { fullResync, getSyncUrl, setSyncUrl, syncNow, testConnection, useSyncState } from '../lib/sync';
@@ -20,6 +21,7 @@ export default function Settings() {
         <div className="stack">
           <SyncSettings />
           <CallingSettings />
+          {isAndroid() && <PhoneContacts />}
           <Appearance />
           <Updates />
         </div>
@@ -143,6 +145,47 @@ function Updates() {
         </label>
         <div className="faint" style={{ fontSize: '0.78rem' }}>Releases: github.com/{GITHUB_REPO}/releases</div>
       </div>
+    </div>
+  );
+}
+
+function PhoneContacts() {
+  const [s, setS] = useState(getContactSave());
+  const [accounts, setAccounts] = useState<string[] | null>(null);
+  const update = (patch: Partial<typeof s>) => { setContactSave(patch); setS(getContactSave()); };
+  const find = async () => {
+    try {
+      const r = await Native.listAccounts();
+      setAccounts(r.accounts);
+      if (!r.accounts.length) toast('No Google account is syncing contacts on this phone yet');
+    } catch (e: any) {
+      toast(e?.code === 'denied' ? 'Allow Contacts access to see your accounts' : e?.message || String(e));
+    }
+  };
+  const modes: [ContactSaveMode, string][] = [['all', 'Every call'], ['connected', 'Only when I spoke to someone'], ['off', 'Off']];
+  return (
+    <div className="card">
+      <div className="card-head"><h3>Phone contacts</h3></div>
+      <div className="faint" style={{ fontSize: '0.82rem', marginBottom: 10 }}>
+        After a call, the number is saved to this phone's contacts as "Name – Company" under your Google account, so it syncs to Google Contacts
+        and shows who's calling when they call back. Numbers already in your contacts are left alone, and new ones get a "TradeLink CRM" label.
+      </div>
+      <div className="tabs" style={{ marginBottom: 12 }}>
+        {modes.map(([m, label]) => <button key={m} className={s.mode === m ? 'on' : ''} onClick={() => update({ mode: m })}>{label}</button>)}
+      </div>
+      <Field label="Save to Google account">
+        <InlineInput value={s.account} placeholder={DEFAULT_CONTACT_ACCOUNT} onSave={(v) => update({ account: v.trim() || DEFAULT_CONTACT_ACCOUNT })} />
+      </Field>
+      <div className="row wrap" style={{ marginTop: 10, gap: 6 }}>
+        <button className="btn sm" onClick={find}>Check accounts on this phone</button>
+        {accounts?.map((a) => <button key={a} className={`chip ${a === s.account ? 'on' : ''}`} onClick={() => update({ account: a })}>{a}</button>)}
+      </div>
+      {accounts && !accounts.includes(s.account) && (
+        <div className="faint" style={{ fontSize: '0.78rem', marginTop: 8 }}>
+          {s.account} isn't syncing contacts on this phone, so numbers are saved on the phone only. Add it in Android Settings → Passwords &amp; accounts and turn on Contacts sync.
+        </div>
+      )}
+      {s.mode === 'connected' && <div className="faint" style={{ fontSize: '0.75rem', marginTop: 8 }}>Calls your Mac sends to this phone aren't saved in this mode (the phone doesn't see their outcome).</div>}
     </div>
   );
 }
