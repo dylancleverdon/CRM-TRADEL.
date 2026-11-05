@@ -47,13 +47,14 @@ function tlBackup_() {
 
 function tlLoad_(allowFetch) {
   if (TL_LOADED) return;
-  var code = null;
+  var code = null, why = '';
   try { code = CacheService.getScriptCache().get('tl_code'); } catch (e) { code = null; }
   if (!code && allowFetch) {
-    try { code = tlFetch_(); } catch (e) { code = null; }
+    try { code = tlFetch_(); } catch (e) { code = null; why = String(e && e.message || e); }
   }
   if (!code) code = tlBackup_();
-  if (!code) throw new Error('TradeLink code could not be downloaded from GitHub yet. Try again in a minute.');
+  if (!code) throw new Error('TradeLink code could not be downloaded from GitHub' + (why ? ': ' + why : '') +
+    '. In Apps Script, select updateNow and click Run once to grant permission.');
   var stub = doPost;
   (0, eval)(code); // defines the real doGet/doPost/onEdit globally, replacing these stubs
   if (doPost === stub) throw new Error('Downloaded TradeLink code is incomplete.');
