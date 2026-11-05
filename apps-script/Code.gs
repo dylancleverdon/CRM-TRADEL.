@@ -33,6 +33,26 @@ var TABLES = {
 };
 
 var DECISIONS = ['Pending', 'Approved', 'Rejected', 'Implemented', 'Duplicate'];
+var SETUP_VERSION = '1';
+
+/** Runs the full setup only once per script version (keeps every sync fast). */
+function ensureSetup_() {
+  var props = PropertiesService.getScriptProperties();
+  var ss = SpreadsheetApp.getActive();
+  var missing = Object.keys(TABLES).some(function (n) { return !ss.getSheetByName(n); });
+  if (missing || props.getProperty('setup') !== SETUP_VERSION) {
+    setup();
+    props.setProperty('setup', SETUP_VERSION);
+  }
+}
+
+function applyDecisionDropdown_(sh) {
+  var hs = getHeaders_(sh);
+  var col = hs.indexOf('decision') + 1;
+  if (!col) return;
+  var rule = SpreadsheetApp.newDataValidation().requireValueInList(DECISIONS, true).setAllowInvalid(true).build();
+  sh.getRange(2, col, Math.max(sh.getMaxRows() - 1, 1), 1).setDataValidation(rule);
+}
 
 function doGet(e) {
   var p = (e && e.parameter) || {};
@@ -79,12 +99,7 @@ function setup() {
     }
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight('bold').setBackground('#0f3d26').setFontColor('#ffffff');
-    if (name === 'suggestions') {
-      var hs = getHeaders_(sh);
-      var col = hs.indexOf('decision') + 1;
-      var rule = SpreadsheetApp.newDataValidation().requireValueInList(DECISIONS, true).setAllowInvalid(true).build();
-      sh.getRange(2, col, Math.max(sh.getMaxRows() - 1, 1), 1).setDataValidation(rule);
-    }
+    if (name === 'suggestions') applyDecisionDropdown_(sh);
   });
   var def = ss.getSheetByName('Sheet1');
   if (def && def.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(def);
@@ -112,7 +127,7 @@ function sync_(body) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    setup();
+    ensureSetup_();
     var ss = SpreadsheetApp.getActive();
     var since = Number(body.since || 0);
     var changes = body.changes || {};
@@ -178,6 +193,7 @@ function sync_(body) {
         var ar = sh.getRange(start, 1, appends.length, headers.length);
         ar.setNumberFormat('@');
         ar.setValues(appends);
+        if (name === 'suggestions') applyDecisionDropdown_(sh);
       }
 
       var result = [];
