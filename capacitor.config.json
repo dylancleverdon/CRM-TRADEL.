@@ -1,0 +1,7 @@
+{
+  "appId": "com.tradelink.crm",
+  "appName": "TradeLink CRM",
+  "webDir": "dist",
+  "android": { "allowMixedContent": true },
+  "plugins": { "CapacitorHttp": { "enabled": false } }
+}

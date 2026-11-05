@@ -1,0 +1,52 @@
+# TradeLink CRM
+
+A cold-calling CRM for TradeLink's home-service outreach. It has a Mac desktop app and an Android app that share data through a Google Sheet.
+
+## Downloads (always the latest version)
+
+| Platform | Link |
+|---|---|
+| **Android APK** | https://github.com/dylancleverdon/CRM-TRADEL./releases/latest/download/TradeLink-CRM.apk |
+| **Mac installer (.pkg)** | https://github.com/dylancleverdon/CRM-TRADEL./releases/latest/download/TradeLink-CRM-Installer.pkg |
+| Mac disk image (.dmg) | https://github.com/dylancleverdon/CRM-TRADEL./releases/latest/download/TradeLink-CRM.dmg |
+
+**Mac one-line automatic installer.** Paste this into Terminal. No clicks needed, and no Gatekeeper prompt:
+
+```bash
+curl -fsSL https://github.com/dylancleverdon/CRM-TRADEL./releases/latest/download/install-mac.sh | bash
+```
+
+> The `.pkg` and `.dmg` aren't signed with a paid Apple Developer ID. The first time you open one, macOS will block it. Go to **System Settings → Privacy & Security** and click **Open Anyway** (on older macOS you can right-click → Open instead). The Terminal command above avoids this entirely.
+
+**Android:** open the APK link on your phone. When Android asks, allow your browser to "install unknown apps", then tap Install.
+
+## Automatic updates
+Every push to the repo builds both apps on GitHub Actions and publishes a new release.
+- **Mac:** downloads the update in the background. It installs when you quit the app, or right away if you click **Restart now**.
+- **Android:** downloads the new APK and opens the installer. You allow "Install unknown apps" for TradeLink CRM once; after that it's one tap.
+
+## Google Sheet sync (one-time setup)
+1. Open the sheet **CRM Tradelink Data Storage**, then go to **Extensions → Apps Script**.
+2. Paste in the contents of [`apps-script/Code.gs`](apps-script/Code.gs) and click **Save**. You can also copy it from inside the app: Settings → Show setup instructions → Copy.
+3. **Deploy → New deployment → Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Click **Deploy** and approve the permissions.
+4. Paste the `/exec` URL into **Settings → Google Sheet sync** on both apps.
+
+The script creates these tabs: `leads`, `contacts`, `opportunities`, `activities`, `tasks`, `suggestions`, `settings`. You can edit rows directly in the sheet and the changes sync back to the apps. In the `suggestions` tab, use the **decision** dropdown (Pending / Approved / Rejected / Implemented / Duplicate).
+
+## How the CRM is organized
+The structure follows the common HubSpot, Salesforce and Pipedrive model:
+- **Leads.** Unqualified businesses you're cold calling. Status goes New → Attempting → Connected → Qualified / Nurture / Disqualified → Converted. Each lead can be marked 👍 good or 👎 bad, with a reason.
+- **Contacts.** Leads you've converted. Status is Prospect, Active Client or Past Client.
+- **Opportunities.** Deals tied to a contact. Each has a service (Yelp Ads, SEO / GBP, Google Ads / LSA, Social, Reviews…), a monthly value plus setup fee, and a stage. Stages and win probabilities: Discovery Booked 20% → Discovery Held 35% → Proposal Sent 60% → Negotiation 80% → Closed Won / Lost.
+- **Activities.** Every call, note, status change and stage change, with date and time, in one timeline. Notes can be edited.
+- **Follow-ups.** Tasks with due dates. Logging a call outcome suggests the next follow-up automatically.
+- **Call Mode.** A queue that puts due follow-ups first, then new leads, then retry attempts. It has your script and one-tap calling. On Android the call goes out on your own phone number, and when you return to the app it asks for the outcome.
+- **Today dashboard.** Calls, connects, meetings and follow-ups against your daily goals. It shows what's done and what's still to do, plus the last 7 days and a pipeline snapshot.
+- **Suggestions.** A box at the bottom of every page. Suggestions are saved to the Suggestions tab of the sheet, and the app shows similar earlier suggestions and their decisions so nothing gets decided twice.
+
+## Development
+```bash
+npm install
+npm run dev            # browser at http://localhost:5173
+npm run electron:dev   # desktop shell
+```

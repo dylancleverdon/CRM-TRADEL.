@@ -1,0 +1,104 @@
+name: Build & Release
+
+# Every push builds the Mac app + Android APK and publishes them as the "latest" GitHub release.
+# Both apps check that release and update themselves automatically.
+on:
+  push:
+    branches: [main, master, 'claude/admiring-knuth-2gio93']
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+    steps:
+      - id: v
+        run: |
+          echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "code=$(( ${{ github.run_number }} + 1 ))" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION_NAME: ${{ needs.version.outputs.version }}
+      VERSION_CODE: ${{ needs.version.outputs.code }}
+      APP_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - run: npm ci
+      - run: npm version "$APP_VERSION" --no-git-tag-version --allow-same-version
+      - run: npx vite build
+      - run: npx cap sync android
+      - name: Build APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon --stacktrace
+      - run: cp android/app/build/outputs/apk/release/app-release.apk TradeLink-CRM.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: TradeLink-CRM.apk }
+
+  mac:
+    needs: version
+    runs-on: macos-latest
+    env:
+      APP_VERSION: ${{ needs.version.outputs.version }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm version "$APP_VERSION" --no-git-tag-version --allow-same-version
+      - run: npx vite build
+      - run: npx electron-builder --mac dir --universal --publish never
+      - run: bash scripts/package-mac.sh "$APP_VERSION"
+      - uses: actions/upload-artifact@v4
+        with: { name: mac, path: out/* }
+
+  release:
+    needs: [version, android, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+      - name: Prepare release files
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          cp scripts/install-mac.sh artifacts/install-mac.sh
+          printf '{"version":"%s","date":"%s","commit":"%s"}\n' "$V" "$(date -u +%FT%TZ)" "${GITHUB_SHA::7}" > artifacts/latest.json
+          ls -la artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: TradeLink CRM v${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          make_latest: 'true'
+          body: |
+            **Android:** download `TradeLink-CRM.apk` on your phone and open it.
+            **Mac (automatic):** open Terminal and run
+            `curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install-mac.sh | bash`
+            **Mac (installer):** `TradeLink-CRM-Installer.pkg` (or the `.dmg`).
+
+            Both apps update themselves automatically from this page.
+          files: |
+            artifacts/TradeLink-CRM.apk
+            artifacts/TradeLink-CRM-mac.zip
+            artifacts/TradeLink-CRM.dmg
+            artifacts/TradeLink-CRM-Installer.pkg
+            artifacts/install-mac.sh
+            artifacts/latest.json

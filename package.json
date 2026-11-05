@@ -1,0 +1,58 @@
+{
+  "name": "tradelink-crm",
+  "productName": "TradeLink CRM",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TradeLink CRM - cold calling CRM for home service marketing",
+  "author": "TradeLink",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "electron:dev": "vite build && electron .",
+    "dist:mac": "vite build && electron-builder --mac dir --universal --publish never && bash scripts/package-mac.sh",
+    "android:sync": "vite build && npx cap sync android"
+  },
+  "build": {
+    "appId": "com.tradelink.crm",
+    "productName": "TradeLink CRM",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "icon": "build/icon.png",
+      "target": [
+        "dir"
+      ],
+      "identity": null,
+      "darkModeSupport": true
+    }
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@types/papaparse": "^5.3.15",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "date-fns": "^4.1.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "idb-keyval": "^6.2.1",
+    "lucide-react": "^0.460.0",
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
