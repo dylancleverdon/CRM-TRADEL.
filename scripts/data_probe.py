@@ -1,10 +1,12 @@
-"""Runs the Lead Finder's exact queries against the live public datasets (GitHub Actions)."""
+"""Statewide survey: every published business-license-like dataset covering Washington (GitHub Actions)."""
 import json
-import time
 import urllib.parse
 import urllib.request
 
-NAICS = ['23611', '238', '5617', '56162', '81141', '4842', '5621', '562991']
+WA_BBOX = "-124.85,45.54,-116.91,49.01"
+TERMS = ["business license", "business licenses", "business registration", "licensed businesses", "business directory",
+         "businesses", "business location", "contractor license", "home occupation"]
+KEYS = ("business", "licen", "contractor", "occupation")
 
 
 def get(url):
@@ -13,42 +15,58 @@ def get(url):
         return json.loads(r.read().decode())
 
 
-def socrata(name, domain, ds, params):
-    t = time.time(); rows = []; off = 0; size = 0
-    while True:
-        q = urllib.parse.urlencode({**params, "$limit": 5000, "$offset": off})
-        req = urllib.request.Request(f"https://{domain}/resource/{ds}.json?{q}", headers={"User-Agent": "probe"})
-        with urllib.request.urlopen(req, timeout=120) as r:
-            body = r.read(); size += len(body); page = json.loads(body)
-        rows += page; off += 5000
-        if len(page) < 5000: break
-    with_phone = sum(1 for r in rows if (r.get("phonenumber") or r.get("business_phone")))
-    print(f"{name}: {len(rows)} rows, {with_phone} with phone, {size/1e6:.1f} MB, {time.time()-t:.1f}s, pages={off//5000}")
-    print("  sample:", json.dumps(rows[0])[:400] if rows else None)
+print("=== ArcGIS Hub/Online: datasets whose extent is inside Washington ===")
+seen = {}
+for term in TERMS:
+    url = "https://hub.arcgis.com/api/search/v1/collections/dataset/items?" + urllib.parse.urlencode({"q": term, "bbox": WA_BBOX, "limit": 100})
+    pages = 0
+    while url and pages < 10:
+        try:
+            d = get(url)
+        except Exception as e:  # noqa: BLE001
+            print("hub error", term, e); break
+        for f in d.get("features", []):
+            p = f.get("properties", {})
+            title = (p.get("title") or "")
+            if not any(k in title.lower() for k in KEYS):
+                continue
+            key = p.get("url") or p.get("id")
+            if key in seen:
+                continue
+            seen[key] = (title, p.get("owner") or "", p.get("url") or "", str(p.get("modified") or "")[:10])
+        nxt = [l["href"] for l in d.get("links", []) if l.get("rel") == "next"]
+        url = nxt[0] if nxt else None
+        pages += 1
+for k, (title, owner, url, mod) in sorted(seen.items(), key=lambda x: x[1][1]):
+    print(f"  {title} | {owner} | {url} | {mod}")
+print("total hub candidates:", len(seen))
 
+print("\n=== Socrata: all Washington government open-data domains ===")
+try:
+    doms = get("https://api.us.socrata.com/api/catalog/v1/domains?limit=2000")["results"]
+    wa = [d["domain"] for d in doms if any(k in d["domain"] for k in ("wa.gov", "seattle", "tacoma", "spokane", "kingcounty", "bellevue",
+                                                                         "everett", "vancouver", "kitsap", "pierce", "snohomish", "clark", "olympia", "redmond", "kirkland", "renton", "kent"))]
+    print("  domains:", wa)
+    for dom in wa:
+        for term in ["business license", "business", "contractor"]:
+            r = get("https://api.us.socrata.com/api/catalog/v1?" + urllib.parse.urlencode({"domains": dom, "q": term, "only": "dataset", "limit": 20}))
+            for x in r["results"]:
+                n = x["resource"]["name"]
+                if any(k in n.lower() for k in KEYS):
+                    print(f"  {dom} | {x['resource']['id']} | {n} | updated {x['resource'].get('data_updated_at','')[:10]}")
+except Exception as e:  # noqa: BLE001
+    print("socrata error", e)
 
-def arcgis(name, layer, where, fields):
-    t = time.time(); rows = []; off = 0
-    while True:
-        q = urllib.parse.urlencode({"where": where, "outFields": fields, "returnGeometry": "false", "f": "json",
-                                    "resultOffset": off, "resultRecordCount": 2000, "orderByFields": "OBJECTID"})
-        page = get(f"{layer}/query?{q}")
-        if "error" in page: print(name, "ERROR", page["error"]); return
-        feats = [f["attributes"] for f in page.get("features", [])]
-        rows += feats; off += 2000
-        if (len(feats) < 2000 and not page.get("exceededTransferLimit")) or not feats: break
-    print(f"{name}: {len(rows)} rows, {time.time()-t:.1f}s")
-    print("  sample:", json.dumps(rows[0])[:400] if rows else None)
-
-
-socrata("L&I active", "data.wa.gov", "m8qx-ubtq", {
-    "$select": "businessname,contractorlicensenumber,contractorlicensetypecode,contractorlicensetypecodedesc,address1,address2,city,state,zip,phonenumber,licenseeffectivedate,businesstypecodedesc,specialtycode1desc,specialtycode2desc,ubi,primaryprincipalname",
-    "$where": "statuscode='A'", "$order": "contractorlicensenumber"})
-socrata("Seattle home services", "cos-data.seattle.gov", "wnbq-64tb", {
-    "$where": " OR ".join(f"starts_with(naics_code, '{p}')" for p in NAICS), "$order": "city_account_number"})
-arcgis("Bellevue home services", "https://services1.arcgis.com/EYzEZbDhXZjURPbP/arcgis/rest/services/Business_Licenses_(All)/FeatureServer/3",
-       "CancelDate IS NULL AND (" + " OR ".join(f"Naic LIKE '{p}%'" for p in NAICS) + ")",
-       "OBJECTID,BusinessId,LegalEntityName,Dba,Ubi,Naic,LegalEntityType,FirstActivityDate,CancelDate,PhysicalCity")
-arcgis("Tacoma home services", "https://services3.arcgis.com/SCwJH1pD8WSn5T5y/arcgis/rest/services/Business_Licenses/FeatureServer/0",
-       " OR ".join(f"NAICS_Code LIKE '{p}%'" for p in NAICS),
-       "OBJECTID,License_Number,Business_Name,Trade_Name,NAICS_Code,Business_Open_Date,Site_City")
+print("\n=== Seattle 'Seattle Business License' map layer (with contact names) ===")
+try:
+    d = get("https://hub.arcgis.com/api/search/v1/collections/dataset/items?" + urllib.parse.urlencode({"q": "Seattle Business License", "limit": 10}))
+    for f in d.get("features", []):
+        p = f["properties"]
+        print("  ", p.get("title"), "|", p.get("owner"), "|", p.get("url"))
+        if p.get("owner") == "SeattleCityGIS" and p.get("url") and "Business_License" in p.get("url", "").replace(" ", "_"):
+            base = p["url"]
+            meta = get(base + "?f=json")
+            print("   fields:", [x["name"] for x in meta.get("fields", [])][:40])
+            print("   count:", get(base + "/query?where=1%3D1&returnCountOnly=true&f=json"))
+except Exception as e:  # noqa: BLE001
+    print("seattle layer error", e)
