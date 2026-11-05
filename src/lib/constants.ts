@@ -62,6 +62,8 @@ export const CALL_OUTCOMES: OutcomeDef[] = [
   { name: 'Call Back Later', connected: true, attempt: true, status: 'Connected', followUpDays: 1, color: 'warn' },
   { name: 'Interested - Send Info', connected: true, attempt: true, status: 'Qualified', quality: 'good', followUpDays: 2, color: 'good' },
   { name: 'Meeting Booked', connected: true, attempt: true, status: 'Qualified', quality: 'good', followUpDays: 1, color: 'good' },
+  // Good conversation, not ready to buy yet, wants to stay in touch ("saved my info, call me after the new year").
+  { name: 'Warm – Not Ready Yet', connected: true, attempt: true, status: 'Nurture', quality: 'good', followUpDays: 30, color: 'good' },
   { name: 'Not Interested', connected: true, attempt: true, status: 'Nurture', followUpDays: 90, color: 'bad' },
   { name: 'Wrong Number', connected: false, attempt: true, status: 'Disqualified', quality: 'bad', disqualifyReason: 'Wrong number / bad data', color: 'bad' },
   { name: 'Do Not Call', connected: true, attempt: true, status: 'Disqualified', quality: 'bad', disqualifyReason: 'Do not call', color: 'bad' },
