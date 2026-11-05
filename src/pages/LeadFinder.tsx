@@ -7,7 +7,7 @@ import { exportCsv, ExportIcon, useIsMobile } from '../components/RecordForm';
 import { Empty, StatusPill } from '../components/ui';
 import { DEFAULT_TRADES } from '../lib/constants';
 import { ago, formatPhone, shortDate } from '../lib/format';
-import { isNewBusiness, SOURCE_LABEL, type SourceId } from '../lib/leadmap';
+import { isNewBusiness, missingInfo, SOURCE_LABEL, type SourceId } from '../lib/leadmap';
 import { DEFAULT_ENABLED, refreshPool, SOURCES, useFinder } from '../lib/leadsources';
 import { setSetting, useSetting, useTable } from '../lib/store';
 import type { Lead } from '../lib/types';
@@ -21,7 +21,8 @@ export default function LeadFinder() {
   const [trade, setTrade] = useState('');
   const [city, setCity] = useState('');
   const [minScore, setMinScore] = useState(0);
-  const [phone, setPhone] = useState<'any' | 'yes' | 'no'>('yes');
+  const [phone, setPhone] = useState<'any' | 'yes' | 'no' | 'owner' | 'needsinfo'>('yes');
+  const [status, setStatus] = useState<'active' | 'lapsed' | 'gone' | 'all'>('active');
   const [onlyNew, setOnlyNew] = useState(false);
   const [untouched, setUntouched] = useState(true);
   const [source, setSource] = useState<SourceId | ''>('');
@@ -40,13 +41,15 @@ export default function LeadFinder() {
       .filter((l) => !trade || l.trade === trade)
       .filter((l) => !cl || (l.city || '').toLowerCase().startsWith(cl) || (l as any).zip === city)
       .filter((l) => (l.score || 0) >= minScore)
-      .filter((l) => phone === 'any' || (phone === 'yes' ? !!l.phone : !l.phone))
+      .filter((l) => phone === 'any' || (phone === 'yes' ? !!l.phone : phone === 'no' ? !l.phone
+        : phone === 'owner' ? !l.contactName : !l.phone || !l.contactName))
+      .filter((l) => status === 'all' || (status === 'gone' ? !!l.notListedSince : status === 'lapsed' ? !!l.lapsedAt && !l.notListedSince : !l.lapsedAt && !l.notListedSince))
       .filter((l) => !onlyNew || isNewBusiness(l.licenseStart || '', now))
       .filter((l) => !untouched || (!l.attempts && l.status === 'New'))
       .filter((l) => !source || (l.sources || '').split(',').includes(source))
       .filter((l) => !ql || [l.company, l.contactName, l.phone, l.specialty].some((x) => (x || '').toLowerCase().includes(ql)))
       .sort((a, b) => (b.score || 0) - (a.score || 0));
-  }, [publicLeads, q, trade, city, minScore, phone, onlyNew, untouched, source]);
+  }, [publicLeads, q, trade, city, minScore, phone, status, onlyNew, untouched, source]);
 
   const byTrade = useMemo(() => {
     const m = new Map<string, number>();
@@ -55,6 +58,16 @@ export default function LeadFinder() {
   }, [rows]);
 
   const newCount = useMemo(() => publicLeads.filter((l) => isNewBusiness(l.licenseStart || '')).length, [publicLeads]);
+  const needs = useMemo(() => {
+    let phoneN = 0, ownerN = 0, lapsedN = 0, goneN = 0;
+    for (const l of publicLeads) {
+      if (!l.phone) phoneN++;
+      if (!l.contactName) ownerN++;
+      if (l.lapsedAt) lapsedN++;
+      if (l.notListedSince) goneN++;
+    }
+    return { phoneN, ownerN, lapsedN, goneN };
+  }, [publicLeads]);
   const togglePriority = (t: string) => setSetting('priorityTrades', priority.includes(t) ? priority.filter((x) => x !== t) : [...priority, t]);
 
   return (
@@ -95,7 +108,7 @@ export default function LeadFinder() {
               );
             })}
             <div className="faint" style={{ fontSize: '0.75rem', marginTop: 8 }}>
-              Data refreshes automatically every week. Businesses appear in Leads and Call Mode right away; they're saved to your Google Sheet only once you call, note or change them.
+              Nothing is thrown away: partial records (no phone/owner), lapsed licenses and businesses that drop off a list are all kept so they can be enriched later. Data refreshes automatically every week. Businesses appear in Leads and Call Mode right away; they're saved to your Google Sheet only once you call, note or change them.
             </div>
           </div>
           <div className="card">
@@ -117,8 +130,13 @@ export default function LeadFinder() {
             <option value="">All trades</option>{byTrade.map(([t, n]) => <option key={t} value={t}>{t} ({n.toLocaleString()})</option>)}
           </select>
           <input style={{ width: 140 }} placeholder="City or ZIP" value={city} onChange={(e) => setCity(e.target.value)} />
-          <select style={{ width: 130 }} value={phone} onChange={(e) => setPhone(e.target.value as any)}>
-            <option value="yes">Has phone</option><option value="no">Needs phone</option><option value="any">Any</option>
+          <select style={{ width: 150 }} value={phone} onChange={(e) => setPhone(e.target.value as any)}>
+            <option value="yes">Has phone</option><option value="no">Needs phone ({needs.phoneN.toLocaleString()})</option>
+            <option value="owner">Needs owner ({needs.ownerN.toLocaleString()})</option><option value="needsinfo">Needs any info</option><option value="any">Any</option>
+          </select>
+          <select style={{ width: 150 }} value={status} onChange={(e) => setStatus(e.target.value as any)}>
+            <option value="active">Active licenses</option><option value="lapsed">Lapsed ({needs.lapsedN.toLocaleString()})</option>
+            <option value="gone">No longer listed ({needs.goneN.toLocaleString()})</option><option value="all">All</option>
           </select>
           <select style={{ width: 130 }} value={source} onChange={(e) => setSource(e.target.value as any)}>
             <option value="">All sources</option>{(Object.keys(SOURCE_LABEL) as SourceId[]).map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
@@ -145,10 +163,10 @@ export default function LeadFinder() {
                 {rows.slice(0, limit).map((l) => (
                   <tr key={l.id} onClick={() => navigate(`/leads/${l.id}`)}>
                     <td><ScorePill score={l.score || 0} /></td>
-                    <td><div className="strong">{l.company}{isNewBusiness(l.licenseStart || '') && <span className="pill good" style={{ marginLeft: 6 }}>NEW</span>}</div><div className="faint" style={{ fontSize: '0.78rem' }}>{l.contactName}{l.ownership ? ` · ${l.ownership}` : ''}</div></td>
+                    <td><div className="strong">{l.company}{isNewBusiness(l.licenseStart || '') && <span className="pill good" style={{ marginLeft: 6 }}>NEW</span>}{l.lapsedAt && <span className="pill warn" style={{ marginLeft: 6 }}>lapsed</span>}{l.notListedSince && <span className="pill" style={{ marginLeft: 6 }}>not listed</span>}</div><div className="faint" style={{ fontSize: '0.78rem' }}>{l.contactName}{l.ownership ? ` · ${l.ownership}` : ''}</div></td>
                     <td><div>{l.trade}</div><div className="faint" style={{ fontSize: '0.72rem', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.specialty}</div></td>
                     <td>{l.city}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{l.phone ? formatPhone(l.phone) : <span className="pill warn">needs phone</span>}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{l.phone ? formatPhone(l.phone) : <span className="pill warn">needs phone</span>}{!l.contactName && <div className="faint" style={{ fontSize: '0.72rem' }}>no owner name</div>}</td>
                     <td>{shortDate(l.licenseStart ? l.licenseStart + 'T12:00:00' : '')}</td>
                     <td className="faint" style={{ fontSize: '0.78rem' }}>{l.source}</td>
                     <td onClick={(e) => e.stopPropagation()}>{l.phone && <button className="btn call sm" onClick={() => startCall({ type: 'lead', id: l.id })}><Phone size={13} /></button>}</td>

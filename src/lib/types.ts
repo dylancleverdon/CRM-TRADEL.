@@ -43,6 +43,9 @@ export interface Lead extends BaseRecord {
   ownership?: string;
   sources?: string;
   naics?: string;
+  zip?: string;
+  lapsedAt?: string;
+  notListedSince?: string;
 }
 
 export type ContactStatus = 'Prospect' | 'Active Client' | 'Past Client';

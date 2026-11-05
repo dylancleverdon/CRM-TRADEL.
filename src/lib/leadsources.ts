@@ -6,8 +6,8 @@
 import { get, set } from 'idb-keyval';
 import { useSyncExternalStore } from 'react';
 import {
-  fromBellevue, fromLI, fromSeattle, fromTacoma, HOME_SERVICE_NAICS, mergeBusinesses, toLead,
-  type PublicBiz, type SourceId,
+  carryOver, fromBellevue, fromEverett, fromLI, fromLILapsed, fromSeattle, fromSeattleLoc, fromTacoma, HOME_SERVICE_NAICS,
+  mergeBusinesses, toLead, type PublicBiz, type SourceId,
 } from './leadmap';
 import { httpRequest } from './platform';
 import { getSetting, store } from './store';
@@ -41,13 +41,13 @@ async function socrataAll(domain: string, ds: string, params: Record<string, str
   return rows;
 }
 
-async function arcgisAll(layerUrl: string, where: string, fields: string, onPage: (n: number) => void) {
+async function arcgisAll(layerUrl: string, where: string, fields: string, onPage: (n: number) => void, orderBy = 'OBJECTID') {
   const rows: any[] = [];
   const step = 2000; // ArcGIS Online max records per request
   for (let offset = 0; ; offset += step) {
     const q = new URLSearchParams({
       where, outFields: fields, returnGeometry: 'false', f: 'json',
-      resultOffset: String(offset), resultRecordCount: String(step), orderByFields: 'OBJECTID',
+      resultOffset: String(offset), resultRecordCount: String(step), orderByFields: orderBy,
     });
     const page = await getJson(`${layerUrl}/query?${q}`);
     if (page.error) throw new Error(page.error.message || 'ArcGIS error');
@@ -62,6 +62,8 @@ async function arcgisAll(layerUrl: string, where: string, fields: string, onPage
 
 const naicsWhereSoql = (col: string) => HOME_SERVICE_NAICS.map((p) => `starts_with(${col}, '${p}')`).join(' OR ');
 const naicsWhereArc = (col: string) => HOME_SERVICE_NAICS.map((p) => `${col} LIKE '${p}%'`).join(' OR ');
+const LI_SELECT = 'businessname,contractorlicensenumber,contractorlicensetypecode,contractorlicensetypecodedesc,address1,address2,city,state,zip,phonenumber,licenseeffectivedate,licenseexpirationdate,businesstypecodedesc,specialtycode1desc,specialtycode2desc,ubi,primaryprincipalname';
+const yearsAgo = (n: number) => new Date(Date.now() - n * 365 * 86400000).toISOString().slice(0, 10);
 
 export const SOURCES: SourceDef[] = [
   {
@@ -71,7 +73,7 @@ export const SOURCES: SourceDef[] = [
     hasPhones: true,
     fetchAll: async (onPage) =>
       (await socrataAll('data.wa.gov', 'm8qx-ubtq', {
-        $select: 'businessname,contractorlicensenumber,contractorlicensetypecode,contractorlicensetypecodedesc,address1,address2,city,state,zip,phonenumber,licenseeffectivedate,businesstypecodedesc,specialtycode1desc,specialtycode2desc,ubi,primaryprincipalname',
+        $select: LI_SELECT,
         $where: "statuscode='A'",
         $order: 'contractorlicensenumber',
       }, onPage)).map(fromLI).filter(Boolean) as PublicBiz[],
@@ -86,6 +88,29 @@ export const SOURCES: SourceDef[] = [
         $where: naicsWhereSoql('naics_code'),
         $order: 'city_account_number',
       }, onPage)).map(fromSeattle).filter(Boolean) as PublicBiz[],
+  },
+  {
+    id: 'seattleLoc',
+    name: 'Seattle business locations (owner names)',
+    description: 'Businesses physically located in Seattle — adds owner/contact names and phones, matched by city account number.',
+    hasPhones: true,
+    fetchAll: async (onPage) =>
+      (await arcgisAll('https://services.arcgis.com/ZOyb2t4B0UYuYNYH/arcgis/rest/services/Seattle_Business_License/FeatureServer/0',
+        naicsWhereArc('BUSLIC_NAICS_CODE'),
+        'objectid,BUSLIC_ID,BUSLIC_LEGAL_NAME,BUSLIC_TRADE_NAME,BUSLIC_CONTACT_NAME,BUSLIC_PHONE_NUM,BUSLIC_NAICS_CODE,BUSLIC_NAICS_DESC,BUSLIC_LOCATION_ADRS_TEXT,BUSLIC_MAIL_ADRS_TEXT,BUSLIC_OPENDATE,BUSLIC_CITYACCTNUM',
+        onPage, 'objectid')).map(fromSeattleLoc).filter(Boolean) as PublicBiz[],
+  },
+  {
+    id: 'everett',
+    name: 'Everett business licenses',
+    description: 'Home-service businesses licensed in Everett. No phones — matched to other sources by state UBI.',
+    hasPhones: false,
+    fetchAll: async (onPage) =>
+      (await socrataAll('data.everettwa.gov', 'qvfa-2v26', {
+        $select: 'registration,legalentityname,primarydba,ubi,naics,address,issuedate,firstactivitydate',
+        $where: naicsWhereSoql('naics'),
+        $order: 'registration',
+      }, onPage)).map(fromEverett).filter(Boolean) as PublicBiz[],
   },
   {
     id: 'bellevue',
@@ -109,9 +134,21 @@ export const SOURCES: SourceDef[] = [
         'OBJECTID,License_Number,Business_Name,Business_Open_Date,Trade_Name,NAICS_Code,NAICS_Code_Description,Mailing_Street,Mailing_City,Mailing_State,Mailing_Zip_Code,Site_Street,Site_City,Site_State,Site_Zip_Code',
         onPage)).map(fromTacoma).filter(Boolean) as PublicBiz[],
   },
+  {
+    id: 'liLapsed',
+    name: 'WA L&I lapsed licenses (last 2 years)',
+    description: 'Contractors whose license expired recently — many are still working or about to renew. Scored lower.',
+    hasPhones: true,
+    fetchAll: async (onPage) =>
+      (await socrataAll('data.wa.gov', 'm8qx-ubtq', {
+        $select: LI_SELECT,
+        $where: `statuscode='E' AND licenseexpirationdate > '${yearsAgo(2)}T00:00:00'`,
+        $order: 'contractorlicensenumber',
+      }, onPage)).map(fromLILapsed).filter(Boolean) as PublicBiz[],
+  },
 ];
 
-export const DEFAULT_ENABLED: Record<SourceId, boolean> = { li: true, seattle: true, bellevue: true, tacoma: true };
+export const DEFAULT_ENABLED: Record<SourceId, boolean> = { li: true, seattle: true, seattleLoc: true, everett: true, bellevue: true, tacoma: true, liLapsed: true };
 
 // ---------------------------------------------------------------- state
 
@@ -180,6 +217,7 @@ export async function refreshPool(): Promise<void> {
   const enabled = getSetting<Record<SourceId, boolean>>('publicSources', DEFAULT_ENABLED);
   const lists: PublicBiz[][] = [];
   const sources = { ...state.sources };
+  const ok = new Set<SourceId>();
   // keep previously downloaded data for any source that fails this time
   const previous = (id: SourceId) => Array.from(pool.values()).filter((b) => b.sources[0] === id);
   for (const src of SOURCES) {
@@ -187,13 +225,16 @@ export async function refreshPool(): Promise<void> {
     try {
       const list = await src.fetchAll((n) => setState({ progress: `${src.name}: ${n.toLocaleString()} records…` }));
       lists.push(list);
+      ok.add(src.id);
       sources[src.id] = { count: list.length, fetchedAt: Date.now(), error: '' };
     } catch (e: any) {
       lists.push(previous(src.id));
       sources[src.id] = { ...(sources[src.id] || { count: 0, fetchedAt: 0 }), error: e?.message || String(e) };
     }
   }
-  pool = mergeBusinesses(lists);
+  // disabled sources count as "ok" so their old records are simply dropped
+  for (const src of SOURCES) if (enabled[src.id] === false) ok.add(src.id);
+  pool = carryOver(pool, mergeBusinesses(lists), ok);
   const fetchedAt = Date.now();
   try {
     await set(KEY_DATA, Array.from(pool.values()));

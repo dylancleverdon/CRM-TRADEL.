@@ -3,11 +3,14 @@
  * No network or storage here so it can be unit tested.
  */
 
-export type SourceId = 'li' | 'seattle' | 'bellevue' | 'tacoma';
+export type SourceId = 'li' | 'seattle' | 'seattleLoc' | 'everett' | 'bellevue' | 'tacoma' | 'liLapsed';
 
 export const SOURCE_LABEL: Record<SourceId, string> = {
   li: 'WA L&I',
   seattle: 'Seattle',
+  seattleLoc: 'Seattle (owners)',
+  everett: 'Everett',
+  liLapsed: 'WA L&I (lapsed)',
   bellevue: 'Bellevue',
   tacoma: 'Tacoma',
 };
@@ -30,6 +33,12 @@ export interface PublicBiz {
   ownership: string;
   licenseStart: string; // ISO date
   naics: string;
+  /** Extra identifiers used to merge records across sources, e.g. "seaacct:0001325410134112". */
+  keys?: string[];
+  /** Contractor license expired on this date (lapsed-license source). */
+  lapsedAt?: string;
+  /** No longer present in any source since this date (kept so nothing is lost). */
+  notListedSince?: string;
 }
 
 // ---------------------------------------------------------------- trades
@@ -221,7 +230,84 @@ export function fromSeattle(r: Record<string, any>): PublicBiz | null {
     ownership: r.ownership_type || '',
     licenseStart: isoDate(r.license_start_date),
     naics: String(r.naics_code || ''),
+    keys: r.city_account_number ? [`seaacct:${r.city_account_number}`] : [],
   };
+}
+
+/** "317 27TH AVE S, SEATTLE, WA 98144" / "212 74TH ST SE, EVERETT, WA, 98203" → parts */
+export function splitAddress(a: string): { street: string; city: string; state: string; zip: string } {
+  const parts = String(a || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const zipM = String(a || '').match(/\b(\d{5})(?:-\d{4})?\s*$/);
+  const stateM = String(a || '').match(/\b([A-Z]{2})\b[ ,]*\d{5}/);
+  return {
+    street: parts[0] || '',
+    city: parts.length > 1 ? parts[1].replace(/\s+[A-Z]{2}\s*\d{5}.*$/, '') : '',
+    state: stateM ? stateM[1] : 'WA',
+    zip: zipM ? zipM[1] : '',
+  };
+}
+
+/** Seattle "Business Locations (Active)" layer — has owner/contact names. */
+export function fromSeattleLoc(r: Record<string, any>): PublicBiz | null {
+  const trade = tradeFromNaics(r.BUSLIC_NAICS_CODE);
+  if (!trade) return null;
+  const company = titleCase(r.BUSLIC_TRADE_NAME || r.BUSLIC_LEGAL_NAME);
+  if (!company) return null;
+  const a = splitAddress(r.BUSLIC_LOCATION_ADRS_TEXT || r.BUSLIC_MAIL_ADRS_TEXT || '');
+  const acct = String(r.BUSLIC_CITYACCTNUM || '').trim();
+  return {
+    id: acct ? `sea-${acct}` : `sealoc-${r.BUSLIC_ID}`,
+    sources: ['seattleLoc'],
+    company,
+    contactName: titleCase(r.BUSLIC_CONTACT_NAME || ''),
+    phone: cleanPhone(r.BUSLIC_PHONE_NUM),
+    address: titleCase(a.street),
+    city: titleCase(a.city || 'Seattle'),
+    state: a.state,
+    zip: a.zip,
+    trade,
+    specialty: titleCase(String(r.BUSLIC_NAICS_DESC || r['NAICS DESC'] || '').trim()),
+    licenseNo: '',
+    ubi: '',
+    ownership: '',
+    licenseStart: isoDate(r.BUSLIC_OPENDATE),
+    naics: String(r.BUSLIC_NAICS_CODE || ''),
+    keys: acct ? [`seaacct:${acct}`] : [],
+  };
+}
+
+export function fromEverett(r: Record<string, any>): PublicBiz | null {
+  const trade = tradeFromNaics(r.naics);
+  if (!trade) return null;
+  const company = titleCase(r.primarydba || r.legalentityname);
+  if (!company) return null;
+  const ubi = ubi9(r.ubi);
+  const a = splitAddress(r.address || '');
+  return {
+    id: ubi ? `wa-${ubi}` : `evt-${r.registration}`,
+    sources: ['everett'],
+    company,
+    contactName: '',
+    phone: '',
+    address: titleCase(a.street),
+    city: titleCase(a.city || 'Everett'),
+    state: a.state,
+    zip: a.zip,
+    trade,
+    specialty: '',
+    licenseNo: '',
+    ubi,
+    ownership: '',
+    licenseStart: isoDate(r.firstactivitydate || r.issuedate),
+    naics: String(r.naics || ''),
+  };
+}
+
+/** Recently expired L&I licenses: same shape as fromLI, flagged as lapsed. */
+export function fromLILapsed(r: Record<string, any>): PublicBiz | null {
+  const b = fromLI(r);
+  if (!b) return null;
+  return { ...b, sources: ['liLapsed'], lapsedAt: isoDate(r.licenseexpirationdate) };
 }
 
 export function fromBellevue(r: Record<string, any>): PublicBiz | null {
@@ -279,32 +365,74 @@ export function fromTacoma(r: Record<string, any>): PublicBiz | null {
 // ---------------------------------------------------------------- merge
 
 /** Merge businesses from several sources: same id (state UBI) → one record; earlier sources win per field. */
+const NO_MERGE = new Set(['sources', 'id', 'keys', 'lapsedAt', 'notListedSince']);
+
+/**
+ * Merge businesses from several sources into one record each. Records are the same business when they share
+ * an id (state UBI), any extra key (e.g. Seattle account number) or a phone number. Earlier sources win per field;
+ * later ones only fill gaps, so partial records still enrich each other.
+ */
 export function mergeBusinesses(lists: PublicBiz[][]): Map<string, PublicBiz> {
   const out = new Map<string, PublicBiz>();
-  const byPhone = new Map<string, string>();
+  const alias = new Map<string, string>(); // key → id
+  const keysOf = (b: PublicBiz) => [...(b.keys || []), ...(b.phone ? [`phone:${phoneKey(b.phone)}`] : [])];
   for (const list of lists) {
     for (const b of list) {
       let id = b.id;
-      // Same phone number but no shared UBI (e.g. Tacoma): treat as the same business.
-      const pk = b.phone ? phoneKey(b.phone) : '';
-      if (!out.has(id) && pk && byPhone.has(pk)) id = byPhone.get(pk)!;
+      if (!out.has(id)) {
+        const hit = keysOf(b).map((k) => alias.get(k)).find(Boolean);
+        if (hit) id = hit;
+      }
       const cur = out.get(id);
       if (!cur) {
-        out.set(id, { ...b, id });
+        out.set(id, { ...b, id, sources: [...b.sources], keys: [...(b.keys || [])] });
       } else {
         for (const k of Object.keys(b) as (keyof PublicBiz)[]) {
-          if (k === 'sources' || k === 'id') continue;
+          if (NO_MERGE.has(k)) continue;
           if (!cur[k] && b[k]) (cur as any)[k] = b[k];
         }
         // a specific trade beats the catch-all "General Contractor"
         if (cur.trade === 'General Contractor' && b.trade && b.trade !== 'General Contractor' && b.trade !== 'Commercial / Industrial')
           cur.trade = b.trade;
         for (const s of b.sources) if (!cur.sources.includes(s)) cur.sources.push(s);
+        for (const k of b.keys || []) if (!cur.keys!.includes(k)) cur.keys!.push(k);
+        // a lapsed record merging into an active one does not make it lapsed
+        if (cur.lapsedAt && !b.lapsedAt) delete cur.lapsedAt;
       }
-      if (pk && !byPhone.has(pk)) byPhone.set(pk, id);
+      const target = out.get(id)!;
+      for (const k of keysOf(target)) if (!alias.has(k)) alias.set(k, id);
     }
   }
   return out;
+}
+
+/**
+ * Keep businesses that dropped out of the latest download (license ended, list changed) for a year,
+ * marked "not listed", so partial leads are never lost. Only applies to sources that downloaded successfully.
+ */
+export function carryOver(prev: Map<string, PublicBiz>, next: Map<string, PublicBiz>, okSources: Set<SourceId>,
+  now = Date.now(), keepDays = 365): Map<string, PublicBiz> {
+  const today = new Date(now).toISOString().slice(0, 10);
+  for (const [id, b] of next) if (b.notListedSince) delete b.notListedSince;
+  for (const [id, old] of prev) {
+    if (next.has(id)) continue;
+    if (!old.sources.every((s) => okSources.has(s))) continue; // its source failed: handled by the caller
+    const since = old.notListedSince || today;
+    if (daysSince(since, now) > keepDays) continue;
+    next.set(id, { ...old, notListedSince: since });
+  }
+  return next;
+}
+
+/** Which useful fields a lead is still missing (drives the "Needs info" worklist). */
+export function missingInfo(l: { phone?: string; contactName?: string; address?: string; website?: string; email?: string }): string[] {
+  const m: string[] = [];
+  if (!l.phone) m.push('phone');
+  if (!l.contactName) m.push('owner name');
+  if (!l.address) m.push('address');
+  if (!l.website) m.push('website');
+  if (!l.email) m.push('email');
+  return m;
 }
 
 // ---------------------------------------------------------------- scoring
@@ -320,7 +448,7 @@ export function daysSince(iso: string, now = Date.now()): number {
 }
 
 /** 0-100: how worth calling this business is. */
-export function scoreBusiness(b: Pick<PublicBiz, 'trade' | 'phone' | 'contactName' | 'ownership' | 'licenseStart' | 'sources'>,
+export function scoreBusiness(b: Pick<PublicBiz, 'trade' | 'phone' | 'contactName' | 'ownership' | 'licenseStart' | 'sources'> & Partial<PublicBiz>,
   priorityTrades: string[] = [], now = Date.now()): number {
   let s = 0;
   if (TIER_A.has(b.trade)) s += 40;
@@ -338,6 +466,8 @@ export function scoreBusiness(b: Pick<PublicBiz, 'trade' | 'phone' | 'contactNam
   if (age <= 90) s += 15;
   else if (age <= 365) s += 8;
   if (b.sources.length > 1) s += 5;
+  if ((b as PublicBiz).lapsedAt) s -= 15;
+  if ((b as PublicBiz).notListedSince) s -= 25;
   return Math.max(0, Math.min(100, Math.round(s)));
 }
 
@@ -381,5 +511,7 @@ export function toLead(b: PublicBiz, priorityTrades: string[] = [], now = Date.n
     sources: b.sources.join(','),
     naics: b.naics,
     zip: b.zip,
+    lapsedAt: b.lapsedAt || '',
+    notListedSince: b.notListedSince || '',
   };
 }

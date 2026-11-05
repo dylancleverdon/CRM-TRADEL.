@@ -10,6 +10,7 @@ import { Empty, Field, Modal, StatusPill, toast } from '../components/ui';
 import { convertLead, setLeadQuality, setLeadStatus } from '../lib/actions';
 import { DEFAULT_TRADES, DISQUALIFY_REASONS, LEAD_STATUSES, LEAD_STATUS_HELP } from '../lib/constants';
 import { ago, formatPhone, when } from '../lib/format';
+import { missingInfo } from '../lib/leadmap';
 import { openExternal } from '../lib/platform';
 import { getSetting, store, useRecord } from '../lib/store';
 import type { Lead, LeadStatus } from '../lib/types';
@@ -119,11 +120,18 @@ function PublicRecord({ lead }: { lead: Lead }) {
         {lead.licenseNo && <><dt>License #</dt><dd>{lead.licenseNo}</dd></>}
         {lead.ubi && <><dt>State UBI</dt><dd>{lead.ubi}</dd></>}
       </dl>
+      {(() => {
+        const miss = missingInfo(lead);
+        return miss.length ? <div className="row wrap" style={{ marginTop: 10, gap: 6 }}><span className="faint" style={{ fontSize: '0.8rem' }}>Missing:</span>{miss.map((m) => <span key={m} className="pill warn">{m}</span>)}</div> : null;
+      })()}
+      {lead.lapsedAt && <div className="pill warn" style={{ marginTop: 8 }}>License lapsed {lead.lapsedAt} — may still be operating</div>}
+      {lead.notListedSince && <div className="pill" style={{ marginTop: 8 }}>Not in any public list since {lead.notListedSince} (kept for reference)</div>}
       <div className="row wrap" style={{ marginTop: 10 }}>
+        {!lead.phone && <button className="btn sm" onClick={() => openExternal(`https://www.google.com/search?q=${encodeURIComponent(`${lead.company} ${lead.city || ''} WA phone`)}`)}>Find phone on Google</button>}
         {isLI && <button className="btn sm" onClick={() => openExternal(`https://secure.lni.wa.gov/verify/Detail.aspx?LIC=${encodeURIComponent(lead.licenseNo!)}`)}>L&I license page</button>}
         <button className="btn sm" onClick={() => openExternal(`https://www.google.com/search?q=${encodeURIComponent(`${lead.company} ${lead.city || ''} WA`)}`)}>Google it</button>
       </div>
-      {!lead.updatedAt && <div className="faint" style={{ fontSize: '0.75rem', marginTop: 8 }}>From public records — saved to your sheet as soon as you call, note or edit it.</div>}
+      {!lead.updatedAt && <div className="faint" style={{ fontSize: '0.75rem', marginTop: 8 }}>From public records — saved to your sheet as soon as you call, note or edit it. Anything you fill in (phone, owner, website…) is kept permanently, even when the public data refreshes.</div>}
     </div>
   );
 }

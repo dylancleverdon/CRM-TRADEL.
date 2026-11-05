@@ -48,6 +48,7 @@ export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[]
       continue;
     }
     if (['Disqualified', 'Converted', 'Nurture', 'Qualified'].includes(l.status)) continue;
+    if (l.notListedSince) continue; // no longer in any public list: kept for reference, not called
     if (l.lastContactedAt && isToday(new Date(l.lastContactedAt))) continue;
     if (l.nextFollowUpAt && l.nextFollowUpAt > eod) continue; // scheduled for later
     if ((l.attempts || 0) >= maxAttempts) continue;
@@ -57,7 +58,7 @@ export function buildCallQueue(leads: Lead[], contacts: Contact[], tasks: Task[]
     const fresh = l.licenseStart && isNewBusiness(l.licenseStart, now);
     if (l.status === 'New' || !l.attempts)
       items.push({ type: 'lead', id: l.id, company: l.company, phone: l.phone,
-        reason: fresh ? `NEW business · score ${score}` : l.origin === 'public' ? `${l.trade || 'Lead'} · score ${score}` : 'New lead',
+        reason: fresh ? `NEW business · score ${score}` : l.lapsedAt ? `Lapsed license · score ${score}` : l.origin === 'public' ? `${l.trade || 'Lead'} · score ${score}` : 'New lead',
         priority: (fresh ? 0.9 : 1) + (100 - score) / 1000 });
     else items.push({ type: 'lead', id: l.id, company: l.company, phone: l.phone, reason: `Attempt #${(l.attempts || 0) + 1}`, priority: 2 + (l.attempts || 0) * 0.1 });
   }
