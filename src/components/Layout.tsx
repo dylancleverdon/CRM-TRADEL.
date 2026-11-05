@@ -1,8 +1,9 @@
 import { isPast } from 'date-fns';
 import { Briefcase, CheckSquare, Contact2, Gauge, Lightbulb, Mail, Menu, PhoneCall, RefreshCw, Search, Settings, Users } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { isDesktop } from '../lib/platform';
+import { unreadEmails } from '../lib/emailmatch';
 import { useTable } from '../lib/store';
 import { syncNow, useSyncState } from '../lib/sync';
 import { installUpdate, useUpdateState } from '../lib/updater';
@@ -18,7 +19,7 @@ const NAV = [
   { to: '/contacts', label: 'Contacts', icon: Contact2 },
   { to: '/pipeline', label: 'Pipeline', icon: Briefcase },
   { to: '/tasks', label: 'Follow-ups', icon: CheckSquare, badge: true },
-  { to: '/email', label: 'Email', icon: Mail },
+  { to: '/email', label: 'Email', icon: Mail, unread: true },
   { to: '/suggestions', label: 'Suggestions', icon: Lightbulb },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -71,6 +72,10 @@ function SyncErrorBanner() {
 export function Layout({ children }: { children: ReactNode }) {
   const tasks = useTable('tasks');
   const overdue = tasks.filter((t) => !t.done && t.dueAt && isPast(new Date(t.dueAt))).length;
+  const acts = useTable('activities');
+  const unread = useMemo(() => unreadEmails(acts).length, [acts]);
+  // Mac: unread email from leads/contacts on the dock icon.
+  useEffect(() => { window.tradelinkDesktop?.setBadge?.(unread); }, [unread]);
   const [more, setMore] = useState(false);
   const loc = useLocation();
   const current = NAV.find((n) => (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)))?.label || 'TradeLink';
@@ -83,6 +88,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink key={n.to} to={n.to} end={n.end} className="nav-link">
             <n.icon size={17} /> {n.label}
             {n.badge && overdue > 0 && <span className="count">{overdue}</span>}
+            {n.unread && unread > 0 && <span className="count unread" title={`${unread} unread email${unread === 1 ? '' : 's'} from leads & contacts`}>{unread}</span>}
           </NavLink>
         ))}
         <div className="sidebar-foot"><SyncIndicator /></div>
@@ -102,7 +108,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/call"><PhoneCall size={21} />Call</NavLink>
           <NavLink to="/leads"><Users size={21} />Leads</NavLink>
           <NavLink to="/tasks"><CheckSquare size={21} />Follow-ups{overdue > 0 && <span className="dot">{overdue}</span>}</NavLink>
-          <button onClick={() => setMore(true)}><Menu size={21} />More</button>
+          <button onClick={() => setMore(true)}><Menu size={21} />More{unread > 0 && <span className="dot unread">{unread}</span>}</button>
         </nav>
       </div>
       {more && (
@@ -111,6 +117,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} className="nav-link" onClick={() => setMore(false)}>
                 <n.icon size={18} /> {n.label}
+                {n.unread && unread > 0 && <span className="count unread">{unread}</span>}
               </NavLink>
             ))}
           </div>

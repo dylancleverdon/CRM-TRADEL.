@@ -1,34 +1,39 @@
-import { Copy, Inbox, Link2, Mail, Plus, RefreshCw, Reply, Trash2, UserPlus } from 'lucide-react';
+import { Check, CheckCheck, Copy, Inbox, Link2, Mail, Plus, RefreshCw, Reply, Trash2, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import loaderCode from '../../apps-script/EmailLoader.gs?raw';
 import { EmailCompose, type ComposeTarget } from '../components/EmailCompose';
+import { EmailReader } from '../components/EmailReader';
 import { Page } from '../components/Layout';
-import { entityLink } from '../components/Tasks';
 import { Empty, Field, InlineInput, Modal, toast } from '../components/ui';
 import { logActivity } from '../lib/actions';
 import { ago, when } from '../lib/format';
-import { backfillAddress, checkEmail, connectEmail, disconnectEmail, useEmail } from '../lib/email';
-import { DEFAULT_TEMPLATES, needsReply, normEmail, type EmailMessage, type EmailTemplate } from '../lib/emailmatch';
+import { backfillAddress, checkEmail, connectEmail, disconnectEmail, markEmailsRead, useEmail } from '../lib/email';
+import { DEFAULT_TEMPLATES, normEmail, readEmails, sentEmails, unreadEmails, type EmailMessage, type EmailTemplate } from '../lib/emailmatch';
 import { setSetting, store, uid, useSetting, useTable } from '../lib/store';
+import type { Activity } from '../lib/types';
 
-type Tab = 'reply' | 'all' | 'other' | 'templates' | 'settings';
+type Tab = 'unread' | 'read' | 'sent' | 'other' | 'templates' | 'settings';
 
 export default function EmailPage() {
   const em = useEmail();
   const acts = useTable('activities');
-  const [tab, setTab] = useState<Tab>('reply');
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>('unread');
   const [compose, setCompose] = useState<ComposeTarget | null>(null);
-  const navigate = useNavigate();
-  const emails = useMemo(() => acts.filter((a) => a.type === 'email').sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)), [acts]);
-  const waiting = useMemo(() => needsReply(emails), [emails]);
+  const openId = params.get('open');
+  const unread = useMemo(() => unreadEmails(acts), [acts]);
+  const read = useMemo(() => readEmails(acts), [acts]);
+  const sent = useMemo(() => sentEmails(acts), [acts]);
+  const open = (id: string) => { params.set('open', id); setParams(params); };
+  const closeReader = () => { params.delete('open'); setParams(params); };
 
   if (em.status === 'not-connected') return <Page title="Email"><ConnectCard /></Page>;
 
   return (
     <Page
       title="Email"
-      sub={<>Connected as <b>{em.me}</b> · {em.status === 'checking' ? 'checking…' : em.lastChecked ? `checked ${ago(new Date(em.lastChecked).toISOString())}` : 'not checked yet'}</>}
+      sub={<>Connected as <b>{em.me}</b> · checks every minute · {em.status === 'checking' ? 'checking…' : em.lastChecked ? `checked ${ago(new Date(em.lastChecked).toISOString())}` : 'not checked yet'}</>}
       actions={<>
         <button className="btn" onClick={() => checkEmail()}><RefreshCw size={15} className={em.status === 'checking' ? 'spin' : ''} /> Check now</button>
         <button className="btn primary" onClick={() => setCompose({})}><Plus size={15} /> New email</button>
@@ -37,42 +42,35 @@ export default function EmailPage() {
       <div className="stack">
         {em.status === 'error' && <div className="banner bad" style={{ borderRadius: 10 }}>Email error: {em.error}</div>}
         <div className="tabs" style={{ width: 'fit-content', maxWidth: '100%' }}>
-          <button className={tab === 'reply' ? 'on' : ''} onClick={() => setTab('reply')}>Needs reply<span className="n">{waiting.length}</span></button>
-          <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')}>Leads & contacts<span className="n">{emails.length}</span></button>
+          <button className={tab === 'unread' ? 'on' : ''} onClick={() => setTab('unread')}>Unread<span className="n">{unread.length}</span></button>
+          <button className={tab === 'read' ? 'on' : ''} onClick={() => setTab('read')}>Read<span className="n">{read.length}</span></button>
+          <button className={tab === 'sent' ? 'on' : ''} onClick={() => setTab('sent')}>Sent<span className="n">{sent.length}</span></button>
           <button className={tab === 'other' ? 'on' : ''} onClick={() => setTab('other')}>Other inbox<span className="n">{em.other.length}</span></button>
           <button className={tab === 'templates' ? 'on' : ''} onClick={() => setTab('templates')}>Templates</button>
           <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>Settings</button>
         </div>
 
-        {tab === 'reply' && (
+        {tab === 'unread' && (
           <div className="card" style={{ padding: '6px 14px' }}>
-            {waiting.length === 0 && <Empty>No replies waiting. 🎉</Empty>}
-            {waiting.map((a) => (
-              <div className="list-item" key={a.id}>
-                <div className="grow clickable" onClick={() => navigate(entityLink(a.entityType, a.entityId))}>
-                  <div className="title">{a.entityName} <span className="faint" style={{ fontWeight: 500 }}>· {a.emailFrom}</span></div>
-                  <div className="meta">{a.outcome.replace(/^Received: /, '')} — {a.notes.slice(0, 140)}</div>
-                </div>
-                <span className="faint" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{when(a.occurredAt)}</span>
-                <button className="btn sm" onClick={() => setCompose({ entity: { type: a.entityType as any, id: a.entityId }, to: a.emailFrom, threadId: a.threadId })}><Reply size={14} /> Reply</button>
-              </div>
-            ))}
+            <div className="row" style={{ padding: '6px 0' }}>
+              <span className="faint" style={{ fontSize: '0.78rem' }}>Email from your leads and contacts you haven't opened. Opening one marks it read.</span>
+              <span className="spacer" />
+              {unread.length > 1 && <button className="btn ghost sm" onClick={() => { markEmailsRead(unread.map((a) => a.id)); toast(`${unread.length} marked as read`); }}><CheckCheck size={14} /> Mark all read</button>}
+            </div>
+            {unread.length === 0 && <Empty>No unread email from leads or contacts. 🎉</Empty>}
+            {unread.map((a) => <EmailRow key={a.id} a={a} onOpen={() => open(a.id)} onMarkRead={() => markEmailsRead([a.id])} />)}
           </div>
         )}
-
-        {tab === 'all' && (
+        {tab === 'read' && (
           <div className="card" style={{ padding: '6px 14px' }}>
-            {emails.length === 0 && <Empty>No emails with leads or contacts yet. Emails to or from any address saved on a lead/contact appear here automatically.</Empty>}
-            {emails.slice(0, 300).map((a) => (
-              <div className="list-item clickable" key={a.id} onClick={() => navigate(entityLink(a.entityType, a.entityId))}>
-                <span className={`pill ${a.direction === 'in' ? 'info' : 'accent'}`}>{a.direction === 'in' ? 'In' : 'Out'}</span>
-                <div className="grow">
-                  <div className="title">{a.entityName} — {a.outcome.replace(/^(Sent|Received): /, '')}</div>
-                  <div className="meta">{a.notes.slice(0, 160)}</div>
-                </div>
-                <span className="faint" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{when(a.occurredAt)}</span>
-              </div>
-            ))}
+            {read.length === 0 && <Empty>Email you've read from leads and contacts shows up here.</Empty>}
+            {read.slice(0, 300).map((a) => <EmailRow key={a.id} a={a} onOpen={() => open(a.id)} />)}
+          </div>
+        )}
+        {tab === 'sent' && (
+          <div className="card" style={{ padding: '6px 14px' }}>
+            {sent.length === 0 && <Empty>Email you send to leads and contacts shows up here.</Empty>}
+            {sent.slice(0, 300).map((a) => <EmailRow key={a.id} a={a} onOpen={() => open(a.id)} />)}
           </div>
         )}
 
@@ -81,7 +79,27 @@ export default function EmailPage() {
         {tab === 'settings' && <EmailSettings />}
       </div>
       {compose && <EmailCompose target={compose} onClose={() => setCompose(null)} />}
+      {openId && <EmailReader activityId={openId} onClose={closeReader} />}
     </Page>
+  );
+}
+
+/** One email in a list: click to read it; unread ones are bold with a ✓ to mark them read. */
+function EmailRow({ a, onOpen, onMarkRead }: { a: Activity; onOpen: () => void; onMarkRead?: () => void }) {
+  const isUnread = !!onMarkRead;
+  const out = a.direction === 'out';
+  return (
+    <div className="list-item clickable" onClick={onOpen}>
+      {isUnread ? <span className="unread-dot" title="Unread" /> : <span className={`pill ${out ? 'accent' : 'info'}`}>{out ? 'Sent' : 'In'}</span>}
+      <div className="grow">
+        <div className="title" style={{ fontWeight: isUnread ? 750 : 600 }}>
+          {a.entityName} <span className="faint" style={{ fontWeight: 500 }}>· {out ? `to ${a.emailTo}` : a.emailFrom}</span>
+        </div>
+        <div className="meta">{a.outcome.replace(/^(Sent|Received): /, '')} — {a.notes.slice(0, 140)}</div>
+      </div>
+      <span className="faint" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{when(a.occurredAt)}</span>
+      {onMarkRead && <button className="btn ghost icon sm" title="Mark as read" onClick={(e) => { e.stopPropagation(); onMarkRead(); }}><Check size={15} /></button>}
+    </div>
   );
 }
 

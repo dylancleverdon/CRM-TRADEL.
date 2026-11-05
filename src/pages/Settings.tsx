@@ -7,6 +7,7 @@ import { Field, InlineInput, toast } from '../components/ui';
 import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_SERVICES, DEFAULT_STAGES, DEFAULT_TRADES, GITHUB_REPO, type StageDef } from '../lib/constants';
 import { ago } from '../lib/format';
 import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
+import { DEFAULT_FOLLOW_UP_TEXT, TEXT_PLACEHOLDERS } from '../lib/texts';
 import { isAndroid, Native, platformName } from '../lib/platform';
 import { setSetting, store, useSetting } from '../lib/store';
 import { cleanServiceName } from '../lib/services';
@@ -21,6 +22,7 @@ export default function Settings() {
         <div className="stack">
           <SyncSettings />
           <CallingSettings />
+          <FollowUpText />
           {isAndroid() && <PhoneContacts />}
           <Appearance />
           <Updates />
@@ -144,6 +146,33 @@ function Updates() {
           Download & install updates automatically
         </label>
         <div className="faint" style={{ fontSize: '0.78rem' }}>Releases: github.com/{GITHUB_REPO}/releases</div>
+      </div>
+    </div>
+  );
+}
+
+function FollowUpText() {
+  const text = useSetting('followUpText', DEFAULT_FOLLOW_UP_TEXT);
+  const [v, setV] = useState(text);
+  const allow = async () => {
+    try {
+      const r = await Native.requestPermissions({ permissions: ['sms'] });
+      toast(r.sms === 'granted' ? 'Texting allowed: the Mac can now send texts through this phone' : 'Texting is still off: allow it in Android Settings → Apps → TradeLink CRM → Permissions');
+    } catch (e: any) { toast(e?.message || String(e)); }
+  };
+  return (
+    <div className="card">
+      <div className="card-head"><h3>Follow-up text</h3></div>
+      <Field label={`Default message (placeholders: ${TEXT_PLACEHOLDERS})`}>
+        <textarea rows={6} value={v} onChange={(e) => setV(e.target.value)} onBlur={() => v !== text && setSetting('followUpText', v)} />
+      </Field>
+      <div className="row wrap" style={{ marginTop: 8 }}>
+        <button className="btn ghost sm" onClick={() => { setV(DEFAULT_FOLLOW_UP_TEXT); setSetting('followUpText', DEFAULT_FOLLOW_UP_TEXT); }}>Reset to default</button>
+        {isAndroid() && <button className="btn sm" onClick={allow}>Allow texting on this phone</button>}
+      </div>
+      <div className="faint" style={{ fontSize: '0.78rem', marginTop: 8 }}>
+        Texts go out from your own number. On the Mac, click Text (or tick "Text them" when you log a call) and your phone sends it:
+        keep TradeLink open on the phone with Desk phone mode on, and connect your email on both (the request travels through your private email connector).
       </div>
     </div>
   );

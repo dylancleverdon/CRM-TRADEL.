@@ -6,6 +6,10 @@ export interface DesktopBridge {
   openExternal(url: string): Promise<void>;
   /** Opens a page in a window docked beside the CRM (newer desktop builds). */
   openSide?(url: string): Promise<void>;
+  /** Brings the CRM window to the front (e.g. after clicking a notification). */
+  focus?(): Promise<void>;
+  /** Number on the dock icon (0 clears it). */
+  setBadge?(n: number): Promise<void>;
   version(): Promise<string>;
   checkForUpdate(): Promise<UpdateState>;
   installUpdate(): Promise<void>;
@@ -27,7 +31,9 @@ interface NativePlugin {
   saveContact(opts: { name: string; company: string; phone: string; title?: string; note?: string; account?: string; group?: string }):
     Promise<{ status: 'saved' | 'saved-on-phone' | 'exists'; name?: string; account?: string }>;
   listAccounts(): Promise<{ accounts: string[] }>;
-  checkPermissions(): Promise<{ call?: string; contacts?: string }>;
+  sendSms(opts: { number: string; body: string; noPrompt?: boolean }): Promise<{ parts: number }>;
+  checkPermissions(): Promise<{ call?: string; contacts?: string; sms?: string }>;
+  requestPermissions(opts?: { permissions: string[] }): Promise<{ call?: string; contacts?: string; sms?: string }>;
   addListener(event: 'downloadProgress', cb: (d: { progress: number }) => void): Promise<PluginListenerHandle>;
 }
 
@@ -80,6 +86,20 @@ export async function openBeside(url: string): Promise<void> {
     try { await Browser.open({ url }); return; } catch { /* fall back to the system browser */ }
   }
   window.open(url, '_blank');
+}
+
+/**
+ * A system notification (Mac app / browser). The Android app's web view can't show them, so there the caller's
+ * in-app alert is what you see.
+ */
+export function notify(title: string, body: string, onClick?: () => void) {
+  if (isAndroid() || typeof Notification === 'undefined') return;
+  const show = () => {
+    const n = new Notification(title, { body });
+    n.onclick = () => { window.focus(); window.tradelinkDesktop?.focus?.(); onClick?.(); n.close(); };
+  };
+  if (Notification.permission === 'granted') show();
+  else if (Notification.permission !== 'denied') Notification.requestPermission().then((p) => p === 'granted' && show()).catch(() => {});
 }
 
 export function openExternal(url: string) {

@@ -41,6 +41,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
 .nav-link { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; color: var(--text-2); font-weight: 550; font-size: 0.93rem; }
 .nav-link:hover { background: var(--surface-2); color: var(--text); }
 .nav-link.active { background: var(--accent-soft); color: var(--accent-text); }
+.nav-link .count.unread, .bottom-nav .dot.unread { background: var(--accent); color: var(--on-accent); }
 .nav-link .count { margin-left: auto; background: var(--bad); color: #fff; border-radius: 99px; font-size: 0.7rem; padding: 1px 7px; font-weight: 700; }
 .nav-section { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); padding: 14px 12px 4px; }
 .sidebar-foot { margin-top: auto; padding: 10px 6px 0; }
@@ -268,3 +269,6 @@ td .strong { font-weight: 600; color: var(--text); }
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; font-size: 0.88rem; }
 .kv dt { color: var(--text-3); }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
+.bottom-nav button { position: relative; }
+.unread-dot { width: 9px; height: 9px; border-radius: 99px; background: var(--accent); flex: none; margin: 0 4px; }
+.email-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.92rem; line-height: 1.55; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; max-height: 46vh; overflow-y: auto; }

@@ -8,6 +8,7 @@ import { duration, formatPhone, fromLocalInput, toLocalInput } from '../lib/form
 import { getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
 import { isAndroid, isDesktop, placeCall } from '../lib/platform';
 import { saveCalledNumber } from '../lib/phonecontacts';
+import { fillText, getFollowUpText, sendFollowUpText } from '../lib/texts';
 import { serviceList, toggleService } from '../lib/services';
 import { getSetting, store } from '../lib/store';
 import { Field, Modal, toast } from './ui';
@@ -105,6 +106,7 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
   const [followTitle, setFollowTitle] = useState('');
   const [convert, setConvert] = useState(true);
   const [service, setService] = useState('');
+  const [sendText, setSendText] = useState(() => localStorage.getItem('tl.autoText') === 'on');
   const services = getSetting('services', DEFAULT_SERVICES);
 
   useEffect(() => {
@@ -138,6 +140,12 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
     });
     toast(`Logged: ${outcome}`);
     saveCalledNumber(call.entity, call.phone, outcome).then((m) => m && toast(m));
+    if (sendText && connectedOutcome) {
+      toast('📱 Sending your follow-up text…');
+      sendFollowUpText(call.entity, call.phone, fillText(getFollowUpText(), call.entity))
+        .then((m) => toast(`📱 ${m}`))
+        .catch((e) => toast(`Follow-up text not sent: ${e?.message || e}`));
+    }
     if (outcome === 'Meeting Booked' && call.entity.type === 'lead' && convert) {
       const lead = store.get('leads', call.entity.id);
       if (lead) {
@@ -152,6 +160,7 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
   };
 
   const isLead = call.entity.type === 'lead';
+  const connectedOutcome = !!CALL_OUTCOMES.find((o) => o.name === outcome)?.connected;
 
   return (
     <Modal
@@ -199,6 +208,12 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
           ))}
           {followUp && <button className="btn sm ghost" onClick={() => setFollowUp('')}>None</button>}
         </div>
+        {connectedOutcome && (
+          <label className="row" style={{ fontSize: '0.88rem', fontWeight: 600 }}>
+            <input type="checkbox" checked={sendText} onChange={(e) => { setSendText(e.target.checked); localStorage.setItem('tl.autoText', e.target.checked ? 'on' : 'off'); }} />
+            📱 Text them my follow-up message (from my phone)
+          </label>
+        )}
         {outcome === 'Meeting Booked' && isLead && (
           <div className="card" style={{ background: 'var(--accent-soft)' }}>
             <label className="row" style={{ fontWeight: 600 }}>

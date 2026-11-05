@@ -1,4 +1,4 @@
-import { BellRing, ExternalLink, ListPlus, Phone, RefreshCw, Search, SkipForward, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { BellRing, ExternalLink, ListPlus, MessageSquare, Phone, RefreshCw, Search, SkipForward, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { startOfDay } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { Page } from '../components/Layout';
 import { NotesFeed } from '../components/Notes';
 import { PresenceCard } from '../components/Presence';
 import { ScriptCard } from '../components/ScriptCard';
+import { TextCompose } from '../components/TextCompose';
 import { Empty, Progress, QualityPill, StatusPill, toast } from '../components/ui';
 import { setLeadQuality, setQueued } from '../lib/actions';
 import {
@@ -30,6 +31,7 @@ export default function CallMode() {
   const tasks = useTable('tasks');
   const acts = useTable('activities');
   const [session, setSession] = useState<CallSession>(loadSession);
+  const [texting, setTexting] = useState(false);
   const { startCall, onLogged } = useCall();
   const goals = useSetting('goals', DEFAULT_GOALS);
   const trades = getSetting('trades', DEFAULT_TRADES);
@@ -121,6 +123,7 @@ export default function CallMode() {
                     <button className="btn" onClick={() => setLeadQuality(rec, 'good')}><ThumbsUp size={15} /> Good</button>
                     <button className="btn" onClick={() => setLeadQuality(rec, 'bad')}><ThumbsDown size={15} /> Bad</button>
                   </>}
+                  <button className="btn" onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
                   <Link className="btn" to={cur.type === 'lead' ? `/leads/${cur.id}` : `/contacts/${cur.id}`}><ExternalLink size={15} /> Open</Link>
                 </div>
                 <div className="faint" style={{ fontSize: '0.8rem', marginTop: 12 }}>
@@ -178,6 +181,7 @@ export default function CallMode() {
           </div>
         </div>
       )}
+      {texting && cur && <TextCompose entity={{ type: cur.type, id: cur.id }} onClose={() => setTexting(false)} />}
     </Page>
   );
 }

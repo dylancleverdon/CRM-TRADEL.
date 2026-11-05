@@ -111,6 +111,17 @@ ipcMain.handle('http', async (_e, { url, method, body }) => {
 });
 ipcMain.handle('open-external', (_e, url) => shell.openExternal(url));
 ipcMain.handle('open-side', (_e, url) => openSide(url));
+ipcMain.handle('focus-window', () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+});
+ipcMain.handle('set-badge', (_e, n) => {
+  const count = Math.max(0, Number(n) || 0);
+  if (process.platform === 'darwin' && app.dock) app.dock.setBadge(count ? String(count) : '');
+  else app.setBadgeCount(count);
+});
 ipcMain.handle('version', () => app.getVersion());
 ipcMain.handle('update-check', () => updater.check(true));
 ipcMain.handle('update-install', () => updater.installNow());

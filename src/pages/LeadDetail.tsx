@@ -1,4 +1,4 @@
-import { ArrowLeft, Phone, StickyNote, ThumbsDown, ThumbsUp, Trash2, UserCheck } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Phone, StickyNote, ThumbsDown, ThumbsUp, Trash2, UserCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
@@ -7,6 +7,7 @@ import { NotesFeed } from '../components/Notes';
 import { Page } from '../components/Layout';
 import { PresenceCard } from '../components/Presence';
 import { QueueButton } from '../components/QueueButton';
+import { TextCompose } from '../components/TextCompose';
 import { TasksPanel } from '../components/Tasks';
 import { Timeline } from '../components/Timeline';
 import { Empty, Field, Modal, StatusPill, toast } from '../components/ui';
@@ -25,6 +26,7 @@ export default function LeadDetail() {
   const navigate = useNavigate();
   const { startCall, logManual } = useCall();
   const [badOpen, setBadOpen] = useState(false);
+  const [texting, setTexting] = useState(false);
   const trades = getSetting('trades', DEFAULT_TRADES);
 
   if (!lead) return <Page title="Lead not found"><Empty><Link to="/leads">Back to leads</Link></Empty></Page>;
@@ -61,6 +63,7 @@ export default function LeadDetail() {
           <button className="btn" onClick={convert}><UserCheck size={15} /> Convert to contact</button>
         )}
         <QueueButton entity={entity} queued={!!lead.queuedAt} disabled={!lead.phone && !lead.queuedAt} />
+        <button className="btn" disabled={!lead.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
         <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
         <button className="btn call" disabled={!lead.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
       </>}
@@ -112,6 +115,7 @@ export default function LeadDetail() {
         </div>
       </div>
       {badOpen && <BadLeadModal lead={lead} onClose={() => setBadOpen(false)} />}
+      {texting && <TextCompose entity={entity} onClose={() => setTexting(false)} />}
     </Page>
   );
 }

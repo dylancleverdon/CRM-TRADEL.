@@ -116,6 +116,8 @@ export interface Activity extends BaseRecord {
   direction?: 'in' | 'out';
   emailFrom?: string;
   emailTo?: string;
+  /** Incoming email: when you read it ('' = unread). */
+  readAt?: string;
 }
 
 export interface Task extends BaseRecord {

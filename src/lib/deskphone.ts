@@ -4,6 +4,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { saveCalledNumber } from './phonecontacts';
+import { pollTextRequests } from './texts';
 import { httpRequest, isAndroid, isDesktop, Native, placeCall } from './platform';
 import { getSyncUrl } from './sync';
 
@@ -57,6 +58,9 @@ export async function waitForAck(id: string, timeoutMs = 20000): Promise<boolean
 // ---------------- phone side ----------------
 const LS_HANDLED = 'tl.deskHandled';
 let timer: any = null;
+let textTimer: any = null;
+/** Texts the Mac asks the phone to send (through the private email connector). */
+const TEXT_POLL_MS = 5000;
 let polling = false;
 
 async function pollOnce() {
@@ -82,12 +86,16 @@ async function pollOnce() {
 
 function applyListener() {
   clearInterval(timer);
+  clearInterval(textTimer);
   timer = null;
+  textTimer = null;
   if (!isAndroid()) return;
   Native.keepAwake({ on: state.enabled }).catch(() => {});
   if (state.enabled) {
     pollOnce();
     timer = setInterval(pollOnce, POLL_MS);
+    pollTextRequests();
+    textTimer = setInterval(pollTextRequests, TEXT_POLL_MS);
   } else set({ listening: false });
 }
 

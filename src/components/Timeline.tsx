@@ -4,6 +4,7 @@ import { logActivity, type Entity } from '../lib/actions';
 import { duration, fromLocalInput, toLocalInput, when } from '../lib/format';
 import { store, useTable } from '../lib/store';
 import type { Activity, ActivityType } from '../lib/types';
+import { EmailReader } from './EmailReader';
 import { Empty, Field, Modal } from './ui';
 
 const ICONS: Record<string, any> = {
@@ -25,6 +26,7 @@ export function Timeline({ entities, title = 'Activity history' }: { entities: E
   );
   const [editing, setEditing] = useState<Activity | null>(null);
   const [adding, setAdding] = useState(false);
+  const [reading, setReading] = useState('');
   const [filter, setFilter] = useState<'all' | 'call' | 'notes'>('all');
 
   const shown = items.filter((a) => filter === 'all' || (filter === 'call' ? a.type === 'call' : ['note', 'email', 'text', 'meeting'].includes(a.type)));
@@ -54,7 +56,8 @@ export function Timeline({ entities, title = 'Activity history' }: { entities: E
               <div className={`tl-icon ${a.type}`}><Icon size={15} /></div>
               <div className="tl-body">
                 <div className="row">
-                  <div className="tl-title" style={{ flex: 1 }}>
+                  <div className={`tl-title ${a.type === 'email' ? 'clickable' : ''}`} style={{ flex: 1 }} title={a.type === 'email' ? 'Open this email' : undefined}
+                    onClick={a.type === 'email' ? () => setReading(a.id) : undefined}>
                     {LABEL[a.type] || a.type}{a.outcome ? ` — ${a.outcome}` : ''}
                     {entities.length > 1 && <span className="faint" style={{ fontWeight: 500 }}> · {a.entityType}</span>}
                   </div>
@@ -71,6 +74,7 @@ export function Timeline({ entities, title = 'Activity history' }: { entities: E
       </div>
       {editing && <ActivityEditor activity={editing} onClose={() => setEditing(null)} />}
       {adding && <ActivityEditor entity={entities[0]} onClose={() => setAdding(false)} />}
+      {reading && <EmailReader activityId={reading} onClose={() => setReading('')} />}
     </div>
   );
 }

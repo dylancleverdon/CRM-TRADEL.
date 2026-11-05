@@ -7,6 +7,10 @@
  *   recent  - recent messages (after a timestamp) so the CRM can log emails with leads/contacts
  *   search  - messages to/from specific addresses
  *   send    - send a new email or reply in a thread
+ *   get     - one message with its full text (for reading it in the CRM)
+ *   markRead / readState - keep "read" in step between Gmail and the CRM
+ *   textRequest / textPoll - the Mac asks your phone to send a follow-up text. This goes through this
+ *             connector (its URL is private to your devices) rather than the sheet's public sync URL.
  * Messages are returned to the CRM app; only emails matching a CRM lead/contact are saved by the app.
  */
 var TL_EMAIL_VERSION = '__CODE_VERSION__';
@@ -37,6 +41,11 @@ function tlEmailHandle_(b) {
     if (b.action === 'recent') return tlRecent_(b);
     if (b.action === 'search') return tlSearch_(b);
     if (b.action === 'send') return tlSend_(b);
+    if (b.action === 'get') return tlGet_(b);
+    if (b.action === 'markRead') return tlMarkRead_(b);
+    if (b.action === 'readState') return tlReadState_(b);
+    if (b.action === 'textRequest') return tlTextRequest_(b);
+    if (b.action === 'textPoll') return tlTextPoll_(b);
     return { ok: false, error: 'Unknown action' };
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
@@ -139,4 +148,70 @@ function tlSend_(b) {
   var d = GmailApp.createDraft(b.to, b.subject || '', b.body || '', opts);
   msg = d.send();
   return { ok: true, message: tlMsg_(msg, msg.getThread().getId(), me) };
+}
+
+/** One message with its full plain text: quoted earlier messages cut off, line breaks kept. */
+function tlGet_(b) {
+  var m = GmailApp.getMessageById(String(b.id || ''));
+  if (!m) return { ok: false, error: 'Message not found' };
+  var msg = tlMsg_(m, m.getThread().getId(), tlMe_());
+  var body = String(m.getPlainBody() || '').replace(/\r\n/g, '\n');
+  var cut = body.search(/\n(On .{5,160}wrote:|-{2,} ?Original Message|From: .+\nSent: )/);
+  if (cut > 0) body = body.slice(0, cut);
+  msg.body = body.replace(/\n{3,}/g, '\n\n').trim().slice(0, 20000);
+  msg.cc = tlAddrs_(m.getCc());
+  return { ok: true, message: msg };
+}
+
+/** Mark messages read (or unread) in Gmail. */
+function tlMarkRead_(b) {
+  var done = [];
+  (b.ids || []).slice(0, 50).forEach(function (id) {
+    try {
+      var m = GmailApp.getMessageById(String(id));
+      if (!m) return;
+      if (b.unread) m.markUnread(); else m.markRead();
+      done.push(id);
+    } catch (e) { /* skip */ }
+  });
+  return { ok: true, done: done };
+}
+
+/** Which of these messages have been read in Gmail since (e.g. on the phone's Gmail app). */
+function tlReadState_(b) {
+  var read = [];
+  (b.ids || []).slice(0, 25).forEach(function (id) {
+    try {
+      var m = GmailApp.getMessageById(String(id));
+      if (m && !m.isUnread()) read.push(id);
+    } catch (e) { /* skip */ }
+  });
+  return { ok: true, read: read };
+}
+
+// ---------- Follow-up texts: the Mac asks the phone (in Desk phone mode) to send an SMS ----------
+
+function tlTextRequest_(b) {
+  var req = b.req || {};
+  if (!req.number || !req.body) return { ok: false, error: 'Missing number or message' };
+  var props = PropertiesService.getScriptProperties();
+  var r = { id: Utilities.getUuid(), at: Date.now(), number: String(req.number), body: String(req.body).slice(0, 1500),
+    name: String(req.name || ''), entityType: String(req.entityType || ''), entityId: String(req.entityId || '') };
+  props.setProperty('tl_textRequest', JSON.stringify(r));
+  var seen = Number(props.getProperty('tl_phoneSeen') || 0);
+  return { ok: true, id: r.id, phoneSeenAgo: seen ? r.at - seen : -1 };
+}
+
+/** The phone polls with phone:true (and acks what it sent); the Mac polls without it to read the ack. */
+function tlTextPoll_(b) {
+  var props = PropertiesService.getScriptProperties();
+  var now = Date.now();
+  if (b.phone) props.setProperty('tl_phoneSeen', String(now));
+  if (b.ack) props.setProperty('tl_textAck', JSON.stringify({ id: String(b.ack), ok: b.ok !== false, error: String(b.error || ''), at: now }));
+  var req = null, ack = null;
+  try { req = JSON.parse(props.getProperty('tl_textRequest') || 'null'); } catch (e) { req = null; }
+  try { ack = JSON.parse(props.getProperty('tl_textAck') || 'null'); } catch (e) { ack = null; }
+  if (req && now - req.at > 120000) req = null; // stale requests are never sent
+  var seen = Number(props.getProperty('tl_phoneSeen') || 0);
+  return { ok: true, serverTime: now, req: b.phone ? req : null, ack: ack, phoneSeenAgo: seen ? now - seen : -1 };
 }

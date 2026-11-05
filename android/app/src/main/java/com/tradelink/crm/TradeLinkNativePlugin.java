@@ -19,6 +19,7 @@ import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.Settings;
+import android.telephony.SmsManager;
 import android.view.WindowManager;
 
 import androidx.core.content.FileProvider;
@@ -52,6 +53,7 @@ import java.util.concurrent.Executors;
  *  - call():       one-tap phone calls through the phone's own SIM/number
  *  - http():       network requests without browser CORS limits (Google Apps Script sync, update checks)
  *  - installApk(): self-update by downloading the newest APK and opening the Android installer
+ *  - sendSms():    sends a text from the phone's own number (follow-up texts, also when the Mac asks)
  *  - saveContact(): saves a called number to the phone's contacts under a Google account, so it syncs to
  *                   Google Contacts and shows as caller ID; listAccounts(): Google accounts syncing contacts here
  */
@@ -59,7 +61,8 @@ import java.util.concurrent.Executors;
     name = "TradeLinkNative",
     permissions = {
         @Permission(strings = { Manifest.permission.CALL_PHONE }, alias = "call"),
-        @Permission(strings = { Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS }, alias = "contacts")
+        @Permission(strings = { Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS }, alias = "contacts"),
+        @Permission(strings = { Manifest.permission.SEND_SMS }, alias = "sms")
     }
 )
 public class TradeLinkNativePlugin extends Plugin {
@@ -111,6 +114,52 @@ public class TradeLinkNativePlugin extends Plugin {
             else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             call.resolve();
         });
+    }
+
+    // -------------------------------------------------------------------- sms
+
+    @PluginMethod
+    public void sendSms(PluginCall call) {
+        if (getPermissionState("sms") != PermissionState.GRANTED) {
+            // Asked for when you're using the phone; when the Mac relays a text the app checks first and never prompts.
+            if (Boolean.TRUE.equals(call.getBoolean("noPrompt", false))) {
+                call.reject("Texting isn't allowed on the phone yet", "denied");
+                return;
+            }
+            requestPermissionForAlias("sms", call, "smsPermsCallback");
+            return;
+        }
+        doSendSms(call);
+    }
+
+    @PermissionCallback
+    private void smsPermsCallback(PluginCall call) {
+        if (getPermissionState("sms") != PermissionState.GRANTED) {
+            call.reject("Texting isn't allowed on the phone", "denied");
+            return;
+        }
+        doSendSms(call);
+    }
+
+    private void doSendSms(PluginCall call) {
+        String number = call.getString("number", "");
+        String body = call.getString("body", "");
+        if (number == null || number.replaceAll("[^0-9]", "").length() < 7 || body == null || body.trim().isEmpty()) {
+            call.reject("Missing number or message");
+            return;
+        }
+        try {
+            SmsManager sms = Build.VERSION.SDK_INT >= 31 ? getContext().getSystemService(SmsManager.class) : SmsManager.getDefault();
+            ArrayList<String> parts = sms.divideMessage(body);
+            // Sent from the phone's own number; Android also saves it to the Messages app conversation.
+            if (parts.size() > 1) sms.sendMultipartTextMessage(number, null, parts, null, null);
+            else sms.sendTextMessage(number, null, body, null, null);
+            JSObject ret = new JSObject();
+            ret.put("parts", parts.size());
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Could not send the text: " + e.getMessage());
+        }
     }
 
     // --------------------------------------------------------------- contacts

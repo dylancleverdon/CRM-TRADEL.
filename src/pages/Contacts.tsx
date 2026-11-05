@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, Phone, Plus, Search, StickyNote, Trash2 } from 'lucide-react';
+import { ArrowLeft, Briefcase, MessageSquare, Phone, Plus, Search, StickyNote, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
@@ -8,6 +8,7 @@ import { Page } from '../components/Layout';
 import { NewOpportunity, OpportunityModal } from '../components/Opportunity';
 import { PresenceCard } from '../components/Presence';
 import { QueueButton } from '../components/QueueButton';
+import { TextCompose } from '../components/TextCompose';
 import { exportCsv, ExportIcon, useIsMobile } from '../components/RecordForm';
 import { TasksPanel } from '../components/Tasks';
 import { Timeline } from '../components/Timeline';
@@ -132,6 +133,7 @@ export function ContactDetail() {
   const opps = useTable('opportunities').filter((o) => o.contactId === id);
   const [params, setParams] = useSearchParams();
   const [newOpp, setNewOpp] = useState(false);
+  const [texting, setTexting] = useState(false);
   const navigate = useNavigate();
   const { startCall, logManual } = useCall();
   const trades = getSetting('trades', DEFAULT_TRADES);
@@ -151,6 +153,7 @@ export function ContactDetail() {
       actions={<>
         <button className="btn" onClick={() => setNewOpp(true)}><Briefcase size={15} /> New opportunity</button>
         <QueueButton entity={entity} queued={!!c.queuedAt} disabled={!c.phone && !c.queuedAt} />
+        <button className="btn" disabled={!c.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
         <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
         <button className="btn call" disabled={!c.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
       </>}
@@ -202,6 +205,7 @@ export function ContactDetail() {
       </div>
       {newOpp && <NewOpportunity contact={c} onClose={() => setNewOpp(false)} onCreated={(o) => { params.set('opp', o.id); setParams(params); }} />}
       {openOpp && <OpportunityModal id={openOpp} onClose={() => { params.delete('opp'); setParams(params); }} />}
+      {texting && <TextCompose entity={entity} onClose={() => setTexting(false)} />}
     </Page>
   );
 }

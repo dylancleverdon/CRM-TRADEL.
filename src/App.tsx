@@ -1,5 +1,6 @@
 import { HashRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { CallProvider } from './components/CallFlow';
+import { EmailAlerts } from './components/EmailAlerts';
 import { Layout } from './components/Layout';
 import { SuggestionBox } from './components/SuggestionBox';
 import { Toaster } from './components/ui';
@@ -49,6 +50,7 @@ export default function App() {
           <PageSuggestions />
         </Layout>
         <Toaster />
+        <EmailAlerts />
       </CallProvider>
     </HashRouter>
   );

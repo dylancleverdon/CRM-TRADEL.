@@ -29,6 +29,8 @@ export interface EmailActivityDraft {
   direction: 'in' | 'out';
   emailFrom: string;
   emailTo: string;
+  /** When it was read ('' = unread). Mail already read in Gmail, and mail you sent, count as read. */
+  readAt: string;
 }
 
 export const normEmail = (e: string) => String(e || '').trim().toLowerCase();
@@ -83,6 +85,7 @@ export function matchMessages(messages: EmailMessage[], people: Map<string, Pers
         direction: m.outgoing ? 'out' : 'in',
         emailFrom: m.from,
         emailTo: m.to.join(', '),
+        readAt: m.outgoing || !m.unread ? m.date : '',
       });
     }
   }
@@ -99,6 +102,28 @@ export function needsReply<T extends { threadId?: string; direction?: string; oc
   }
   return Array.from(latest.values()).filter((a) => a.direction === 'in').sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 }
+
+// ---------------------------------------------------------------- unread / read
+
+/** Emails logged before read tracking existed count as read. */
+export const UNREAD_TRACKING_SINCE = '2026-11-05T00:00:00.000Z';
+
+interface EmailLike { type: string; direction?: string; readAt?: string; occurredAt: string; deleted?: boolean }
+
+export const isUnreadEmail = (a: EmailLike) =>
+  a.type === 'email' && a.direction === 'in' && !a.deleted && !a.readAt && (a.occurredAt || '') >= UNREAD_TRACKING_SINCE;
+
+const newestFirst = <T extends EmailLike>(list: T[]) => list.sort((a, b) => (b.occurredAt || '').localeCompare(a.occurredAt || ''));
+
+/** Incoming email from leads and contacts you haven't opened yet. */
+export const unreadEmails = <T extends EmailLike>(acts: T[]): T[] => newestFirst(acts.filter(isUnreadEmail));
+
+/** Incoming email from leads and contacts you've read. */
+export const readEmails = <T extends EmailLike>(acts: T[]): T[] =>
+  newestFirst(acts.filter((a) => a.type === 'email' && a.direction === 'in' && !a.deleted && !isUnreadEmail(a)));
+
+export const sentEmails = <T extends EmailLike>(acts: T[]): T[] =>
+  newestFirst(acts.filter((a) => a.type === 'email' && a.direction === 'out' && !a.deleted));
 
 // ---------------------------------------------------------------- templates
 
@@ -163,6 +188,22 @@ TradeLink`,
 
 export function fillEmail(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] || '');
+}
+
+/**
+ * Turns an email written for one person back into a reusable template: their name, company, city, trade and
+ * your name become {placeholders} again (whole words only, longest first, so "Al" never matches inside "Also").
+ */
+export function unfillEmail(text: string, vars: Record<string, string>): string {
+  const pairs = Object.entries(vars)
+    .filter(([, v]) => v && v.trim().length >= 2 && !['there', 'your area', 'home service'].includes(v.trim().toLowerCase()))
+    .sort((a, b) => b[1].length - a[1].length);
+  let out = text;
+  for (const [k, v] of pairs) {
+    const esc = v.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`(^|[^\\w{])${esc}(?=$|[^\\w}])`, 'g'), (_, pre) => `${pre}{${k}}`);
+  }
+  return out;
 }
 
 export function firstName(full: string): string {
