@@ -51,6 +51,8 @@ jobs:
           echo "--- read it back"
           post '{"action":"sync","since":0,"changes":{}}' > read.json
           head -c 1500 read.json; echo
+          echo "--- ring-my-phone relay"
+          if post '{"action":"callPoll"}' | grep -q '"ok":true'; then echo "RING_PHONE_READY"; else echo "RING_PHONE_NEEDS_SCRIPT_UPDATE (paste the latest apps-script/Code.gs and deploy a new version)"; fi
           if grep -q '"ok":true' ping.json && grep -q "$NOW" read.json; then echo "SYNC_CHECK_PASSED"; else echo "SYNC_CHECK_FAILED"; exit 1; fi
 
   android:

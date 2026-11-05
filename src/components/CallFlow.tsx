@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { convertLead, createOpportunity, entityName, entityPhone, followUpDate, logCall, type Entity } from '../lib/actions';
 import { CALL_OUTCOMES, DEFAULT_SERVICES } from '../lib/constants';
 import { duration, formatPhone, fromLocalInput, toLocalInput } from '../lib/format';
-import { isAndroid, placeCall } from '../lib/platform';
+import { getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
+import { isAndroid, isDesktop, placeCall } from '../lib/platform';
 import { getSetting, store } from '../lib/store';
 import { Field, Modal, toast } from './ui';
 
@@ -48,6 +49,20 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const p: PendingCall = { entity, phone: num, startedAt: new Date().toISOString(), name: entityName(entity.type, entity.id) };
     localStorage.setItem(PENDING_KEY, JSON.stringify(p));
     setActive(p);
+    if (isDesktop() && getDesktopCallMode() === 'phone') {
+      // Ring the Android phone: it dials, the outcome form stays here on the Mac.
+      setShowForm(true);
+      toast('📱 Sending call to your phone…');
+      ringPhone({ number: num, name: p.name, entityType: entity.type, entityId: entity.id })
+        .then(async (r) => {
+          if (r.phoneSeenAgo < 0 || r.phoneSeenAgo > 20000)
+            toast('Phone isn’t listening — open TradeLink on your phone and turn on Desk phone mode (request waits 45s)');
+          const ok = await waitForAck(r.id, 45000);
+          toast(ok ? '📞 Your phone is dialing' : 'Phone didn’t pick up the call request');
+        })
+        .catch((e) => toast(e?.message || 'Could not reach your phone'));
+      return;
+    }
     try {
       await placeCall(num);
     } catch (e: any) {

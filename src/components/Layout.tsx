@@ -8,6 +8,7 @@ import { syncNow, useSyncState } from '../lib/sync';
 import { installUpdate, useUpdateState } from '../lib/updater';
 import { ago } from '../lib/format';
 import { Modal } from './ui';
+import { DeskPhoneBanner } from './DeskPhone';
 
 const NAV = [
   { to: '/', label: 'Today', icon: Gauge, end: true },
@@ -91,6 +92,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <SyncIndicator compact />
         </div>
         <UpdateBanner />
+        <DeskPhoneBanner />
         <SyncErrorBanner />
         {children}
         <nav className="bottom-nav">

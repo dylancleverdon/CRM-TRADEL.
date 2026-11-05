@@ -20,6 +20,7 @@ interface NativePlugin {
   call(opts: { number: string }): Promise<{ method: string }>;
   http(opts: { url: string; method: string; body?: string }): Promise<{ status: number; text: string }>;
   installApk(opts: { url: string }): Promise<{ status: string }>;
+  keepAwake(opts: { on: boolean }): Promise<void>;
   addListener(event: 'downloadProgress', cb: (d: { progress: number }) => void): Promise<PluginListenerHandle>;
 }
 

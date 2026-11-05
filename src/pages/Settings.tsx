@@ -1,6 +1,7 @@
 import { Check, Copy, Download, RefreshCw, Upload } from 'lucide-react';
 import { useState } from 'react';
 import scriptCode from '../../apps-script/Code.gs?raw';
+import { CallingSettings } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
 import { Field, InlineInput, toast } from '../components/ui';
 import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_SERVICES, DEFAULT_STAGES, DEFAULT_TRADES, GITHUB_REPO, type StageDef } from '../lib/constants';
@@ -17,6 +18,7 @@ export default function Settings() {
       <div className="split">
         <div className="stack">
           <SyncSettings />
+          <CallingSettings />
           <Appearance />
           <Updates />
         </div>

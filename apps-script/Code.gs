@@ -77,6 +77,8 @@ function handle_(body) {
       return { ok: true, serverTime: Date.now(), tables: Object.keys(TABLES), sheet: SpreadsheetApp.getActive().getName() };
     }
     if (body.action === 'sync') return sync_(body);
+    if (body.action === 'callRequest') return callRequest_(body);
+    if (body.action === 'callPoll') return callPoll_(body);
     if (body.action === 'reset' && body.confirm === 'YES') return reset_();
     return { ok: false, error: 'Unknown action' };
   } catch (err) {
@@ -249,6 +251,31 @@ function onEdit(e) {
       }
     }
   } catch (err) { /* ignore */ }
+}
+
+// ---------- "Ring my phone": the Mac asks the Android app to place a call ----------
+// Uses script properties (no sheet reads) so polling every few seconds stays fast.
+
+function callRequest_(body) {
+  var props = PropertiesService.getScriptProperties();
+  var req = body.req || {};
+  req.id = Utilities.getUuid();
+  req.at = Date.now();
+  props.setProperty('callRequest', JSON.stringify(req));
+  var seen = Number(props.getProperty('phoneSeen') || 0);
+  return { ok: true, id: req.id, serverTime: req.at, phoneSeenAgo: seen ? req.at - seen : -1 };
+}
+
+function callPoll_(body) {
+  var props = PropertiesService.getScriptProperties();
+  var now = Date.now();
+  if (body.ack) props.setProperty('callAck', String(body.ack));
+  if (body.phone) props.setProperty('phoneSeen', String(now));
+  var req = null;
+  try { req = JSON.parse(props.getProperty('callRequest') || 'null'); } catch (e) { req = null; }
+  if (req && now - req.at > 45000) req = null; // stale requests are ignored
+  var seen = Number(props.getProperty('phoneSeen') || 0);
+  return { ok: true, serverTime: now, req: req, ack: props.getProperty('callAck') || '', phoneSeenAgo: seen ? now - seen : -1 };
 }
 
 function reset_() {

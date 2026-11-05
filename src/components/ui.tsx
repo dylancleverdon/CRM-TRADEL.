@@ -36,7 +36,7 @@ export function Toaster() {
     pushToast = (msg) => {
       const id = Date.now() + Math.random();
       setItems((x) => [...x, { id, msg }]);
-      setTimeout(() => setItems((x) => x.filter((i) => i.id !== id)), 2600);
+      setTimeout(() => setItems((x) => x.filter((i) => i.id !== id)), msg.length > 60 ? 6000 : 2600);
     };
   }, []);
   return (

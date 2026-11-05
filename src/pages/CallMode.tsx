@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { NotesCard, QuickLinks } from '../components/Detail';
+import { DeskPhoneToggle } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
 import { Empty, Progress, QualityPill, StatusPill } from '../components/ui';
 import { setLeadQuality } from '../lib/actions';
@@ -45,6 +46,7 @@ export default function CallMode() {
       </>}
     >
       <div style={{ marginBottom: 14 }}><Progress value={today.calls} max={goals.calls} /></div>
+      <div className="hide-desktop" style={{ marginBottom: 12 }}><DeskPhoneToggle /></div>
       {!cur && <div className="card"><Empty>🎉 Queue is clear. Import more leads or check back when follow-ups come due.</Empty></div>}
       {cur && rec && (
         <div className="split">

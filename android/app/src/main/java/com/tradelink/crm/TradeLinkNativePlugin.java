@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import android.view.WindowManager;
 
 import androidx.core.content.FileProvider;
 
@@ -77,6 +78,17 @@ public class TradeLinkNativePlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Could not start call: " + e.getMessage());
         }
+    }
+
+    /** Keeps the screen on while "Desk phone mode" is listening for calls from the Mac. */
+    @PluginMethod
+    public void keepAwake(PluginCall call) {
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        getActivity().runOnUiThread(() -> {
+            if (on) getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            call.resolve();
+        });
     }
 
     // ------------------------------------------------------------------- http
