@@ -27,6 +27,27 @@ jobs:
           echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "code=$(( ${{ github.run_number }} + 1 ))" >> "$GITHUB_OUTPUT"
 
+  sync-check:
+    # Verifies the Google Sheet sync endpoint the apps use is reachable and can read + write.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ping and round-trip the Apps Script endpoint
+        run: |
+          URL=$(grep -o "https://script.google.com/macros/s/[^']*/exec" src/lib/sync.ts | head -1)
+          post() { curl -sSL -H 'Content-Type: text/plain' --data "$1" "$URL"; }
+          echo "Endpoint: $URL"
+          echo "--- ping"
+          post '{"action":"ping"}' | tee ping.json | head -c 1500; echo
+          NOW=$(date -u +%FT%T.000Z)
+          echo "--- write healthcheck row to settings tab"
+          post "{\"action\":\"sync\",\"since\":0,\"changes\":{\"settings\":[{\"id\":\"_healthcheck\",\"value\":\"$NOW\",\"updatedAt\":\"$NOW\"}]}}" | head -c 600; echo
+          echo "--- read it back"
+          post '{"action":"sync","since":0,"changes":{}}' > read.json
+          head -c 1500 read.json; echo
+          if grep -q '"ok":true' ping.json && grep -q "$NOW" read.json; then echo "SYNC_CHECK_PASSED"; else echo "SYNC_CHECK_FAILED"; exit 1; fi
+
   android:
     needs: version
     runs-on: ubuntu-latest

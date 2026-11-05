@@ -36,7 +36,7 @@ function SyncSettings() {
   const s = useSyncState();
   const [url, setUrl] = useState(getSyncUrl());
   const [testing, setTesting] = useState(false);
-  const [showScript, setShowScript] = useState(!getSyncUrl());
+  const [showScript, setShowScript] = useState(false);
   const connect = async () => {
     setTesting(true);
     try {

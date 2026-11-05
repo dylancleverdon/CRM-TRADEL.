@@ -11,11 +11,14 @@ export interface SyncState {
 }
 
 const LS_URL = 'tl.syncUrl';
+/** TradeLink's Google Sheet ("CRM Tradelink Data Storage") — used unless another URL is set in Settings. */
+export const DEFAULT_SYNC_URL =
+  'https://script.google.com/macros/s/AKfycbwmZbXvkch8AG8MdvdBjeR0cHbxWcloUoTu2D7PQvlIz-Jx722dsBsbMFRAsgByOO4BFA/exec';
 const LS_SINCE = 'tl.syncSince';
 const LS_LAST = 'tl.lastSyncedAt';
 
 let state: SyncState = {
-  status: localStorage.getItem(LS_URL) ? 'idle' : 'not-configured',
+  status: 'idle',
   lastSyncedAt: Number(localStorage.getItem(LS_LAST) || 0),
   error: '',
   pending: 0,
@@ -35,13 +38,13 @@ export const useSyncState = () =>
     () => state,
   );
 
-export const getSyncUrl = () => localStorage.getItem(LS_URL) || '';
+export const getSyncUrl = () => localStorage.getItem(LS_URL) || DEFAULT_SYNC_URL;
 export function setSyncUrl(url: string) {
   const clean = url.trim();
   if (clean) localStorage.setItem(LS_URL, clean);
   else localStorage.removeItem(LS_URL);
   localStorage.setItem(LS_SINCE, '0');
-  setState({ status: clean ? 'idle' : 'not-configured', error: '' });
+  setState({ status: 'idle', error: '' });
 }
 
 async function call(body: unknown) {

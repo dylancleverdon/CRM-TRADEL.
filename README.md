@@ -29,7 +29,7 @@ Every push to the repo builds both apps on GitHub Actions and publishes a new re
 1. Open the sheet **CRM Tradelink Data Storage**, then go to **Extensions → Apps Script**.
 2. Paste in the contents of [`apps-script/Code.gs`](apps-script/Code.gs) and click **Save**. You can also copy it from inside the app: Settings → Show setup instructions → Copy.
 3. **Deploy → New deployment → Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Click **Deploy** and approve the permissions.
-4. Paste the `/exec` URL into **Settings → Google Sheet sync** on both apps.
+4. The apps already have the TradeLink sheet URL built in. To use a different sheet, paste its `/exec` URL into **Settings → Google Sheet sync**.
 
 The script creates these tabs: `leads`, `contacts`, `opportunities`, `activities`, `tasks`, `suggestions`, `settings`. You can edit rows directly in the sheet and the changes sync back to the apps. In the `suggestions` tab, use the **decision** dropdown (Pending / Approved / Rejected / Implemented / Duplicate).
 
