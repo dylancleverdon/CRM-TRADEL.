@@ -9,6 +9,7 @@ import { isClosed, setOpportunityStage, stages } from '../lib/actions';
 import { DEFAULT_SERVICES } from '../lib/constants';
 import { money, shortDate } from '../lib/format';
 import { getSetting, store, useTable } from '../lib/store';
+import { serviceLabel, serviceList } from '../lib/services';
 
 export default function Pipeline() {
   const opps = useTable('opportunities');
@@ -23,7 +24,7 @@ export default function Pipeline() {
   const services = getSetting('services', DEFAULT_SERVICES);
   const st = stages();
 
-  const filtered = useMemo(() => opps.filter((o) => !service || o.service === service), [opps, service]);
+  const filtered = useMemo(() => opps.filter((o) => !service || serviceList(o.service).includes(service)), [opps, service]);
   const open = filtered.filter((o) => !isClosed(o.stage));
   const mrr = open.reduce((s, o) => s + (o.monthlyValue || 0), 0);
   const weighted = open.reduce((s, o) => s + ((o.monthlyValue || 0) * (o.probability || 0)) / 100, 0);
@@ -98,7 +99,7 @@ export default function Pipeline() {
                     <div className="list-item clickable" key={o.id} onClick={() => openOpp(o.id)}>
                       <div className="grow">
                         <div className="title">{c?.company || o.name}</div>
-                        <div className="meta">{o.service} · {money(o.monthlyValue)}/mo{o.expectedCloseDate ? ` · close ${shortDate(o.expectedCloseDate + 'T12:00:00')}` : ''}</div>
+                        <div className="meta">{serviceLabel(o.service) || '—'} · {money(o.monthlyValue)}/mo{o.expectedCloseDate ? ` · close ${shortDate(o.expectedCloseDate + 'T12:00:00')}` : ''}</div>
                       </div>
                       <StatusPill status={`${o.probability}%`} />
                     </div>

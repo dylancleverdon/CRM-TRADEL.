@@ -1,6 +1,7 @@
 import { addDays, addHours, setHours, setMinutes, startOfDay } from 'date-fns';
 import { DEFAULT_STAGES, outcomeDef, type StageDef } from './constants';
 import { PRESENCE_FIELDS } from './presence';
+import { serviceLabel } from './services';
 import { getSetting, nowIso, store } from './store';
 import type { Activity, ActivityType, Contact, EntityType, Lead, Opportunity, Quality, Task } from './types';
 
@@ -195,6 +196,7 @@ export function convertLead(lead: Lead): Contact {
     nextFollowUpAt: '',
     notes: lead.notes,
     queuedAt: lead.queuedAt || '',
+    script: lead.script || '',
     ...Object.fromEntries(PRESENCE_FIELDS.map((k) => [k, lead[k] || ''])),
   });
   store.upsert('leads', { id: lead.id, status: 'Converted', quality: 'good', convertedContactId: contact.id, ...(lead.queuedAt ? { queuedAt: '' } : {}) });
@@ -213,7 +215,7 @@ export function createOpportunity(contact: Contact, data: Partial<Opportunity>):
   const stage = data.stage || st[0].name;
   const opp = store.upsert('opportunities', {
     contactId: contact.id,
-    name: data.name || `${contact.company} - ${data.service || 'Marketing'}`,
+    name: data.name || `${contact.company} - ${serviceLabel(data.service) || 'Marketing'}`,
     service: data.service || '',
     stage,
     monthlyValue: data.monthlyValue || 0,

@@ -2,7 +2,8 @@ import { ArrowLeft, Phone, StickyNote, ThumbsDown, ThumbsUp, Trash2, UserCheck }
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
-import { InfoFields, NotesCard, QuickLinks } from '../components/Detail';
+import { InfoFields, QuickLinks } from '../components/Detail';
+import { NotesFeed } from '../components/Notes';
 import { Page } from '../components/Layout';
 import { PresenceCard } from '../components/Presence';
 import { QueueButton } from '../components/QueueButton';
@@ -102,7 +103,7 @@ export default function LeadDetail() {
           </div>
           <PresenceCard rec={lead} entity={entity} />
           {(lead.licenseNo || lead.ubi || lead.origin === 'public') && <PublicRecord lead={lead} />}
-          <NotesCard value={lead.notes} onSave={(v) => save('notes', v)} />
+          <NotesFeed postTo={entity} summary={lead.notes} onSummary={(v) => save('notes', v)} />
           <button className="btn bad sm" onClick={() => { if (confirm('Delete this lead?')) { store.remove('leads', lead.id); navigate('/leads'); } }}><Trash2 size={14} /> Delete lead</button>
         </div>
         <div className="stack">

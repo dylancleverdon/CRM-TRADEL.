@@ -1,5 +1,5 @@
 import { ExternalLink, Mail, MapPin } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { EntityType } from '../lib/types';
 import { EmailCompose } from './EmailCompose';
 import { openExternal } from '../lib/platform';
@@ -36,36 +36,6 @@ export function QuickLinks({ rec, entity }: { rec: { email?: string; website?: s
       {composing && entity && <EmailCompose target={{ entity }} onClose={() => setComposing(false)} />}
       {site && <button className="btn sm" onClick={() => openExternal(site)}><ExternalLink size={14} /> Website</button>}
       {place && <button className="btn sm" onClick={() => openExternal(`https://www.google.com/maps/search/${encodeURIComponent(place)}`)}><MapPin size={14} /> Google Maps</button>}
-    </div>
-  );
-}
-
-/** Large editable notes area with autosave. */
-export function NotesCard({ value, onSave, title = 'Notes' }: { value: string; onSave: (v: string) => void; title?: string }) {
-  const [v, setV] = useState(value || '');
-  const [state, setState] = useState<'saved' | 'editing'>('saved');
-  const timer = useRef<any>(null);
-  const latest = useRef(value);
-  useEffect(() => {
-    if (state === 'saved') setV(value || '');
-    latest.current = value;
-  }, [value]);
-  const change = (x: string) => {
-    setV(x);
-    setState('editing');
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => { onSave(x); setState('saved'); }, 1200);
-  };
-  return (
-    <div className="card">
-      <div className="card-head"><h3>{title}</h3><span className="faint" style={{ marginLeft: 'auto', fontSize: '0.75rem' }}>{state === 'editing' ? 'Saving…' : 'Saved'}</span></div>
-      <textarea
-        rows={7}
-        value={v}
-        onChange={(e) => change(e.target.value)}
-        onBlur={() => { if (state === 'editing') { clearTimeout(timer.current); onSave(v); setState('saved'); } }}
-        placeholder="Pain points, current marketing, budget, best time to call, gatekeeper name…"
-      />
     </div>
   );
 }

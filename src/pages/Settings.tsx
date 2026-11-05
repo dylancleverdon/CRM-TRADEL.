@@ -8,6 +8,7 @@ import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_SERVICES, DEFAULT_STAGES, DEFAUL
 import { ago } from '../lib/format';
 import { platformName } from '../lib/platform';
 import { setSetting, store, useSetting } from '../lib/store';
+import { cleanServiceName } from '../lib/services';
 import { fullResync, getSyncUrl, setSyncUrl, syncNow, testConnection, useSyncState } from '../lib/sync';
 import { setThemePrefs, THEMES, useThemePrefs } from '../lib/theme';
 import { APP_VERSION, checkForUpdate, installUpdate, useUpdateState } from '../lib/updater';
@@ -181,6 +182,8 @@ function ScriptEditor({ value }: { value: string }) {
 function ListSetting({ title, k, fallback }: { title: string; k: string; fallback: string[] }) {
   const list = useSetting<string[]>(k, fallback);
   const [add, setAdd] = useState('');
+  // Commas separate an opportunity's services, so a service name can't contain one.
+  const clean = (v: string) => (k === 'services' ? cleanServiceName(v) : v.trim());
   return (
     <div className="card">
       <div className="card-head"><h3>{title}</h3></div>
@@ -190,8 +193,8 @@ function ListSetting({ title, k, fallback }: { title: string; k: string; fallbac
         ))}
       </div>
       <div className="row" style={{ marginTop: 10 }}>
-        <input value={add} onChange={(e) => setAdd(e.target.value)} placeholder="Add…" onKeyDown={(e) => { if (e.key === 'Enter' && add.trim()) { setSetting(k, [...list, add.trim()]); setAdd(''); } }} />
-        <button className="btn" onClick={() => { if (add.trim()) { setSetting(k, [...list, add.trim()]); setAdd(''); } }}>Add</button>
+        <input value={add} onChange={(e) => setAdd(e.target.value)} placeholder="Add…" onKeyDown={(e) => { if (e.key === 'Enter' && clean(add)) { setSetting(k, [...list, clean(add)]); setAdd(''); } }} />
+        <button className="btn" onClick={() => { if (clean(add)) { setSetting(k, [...list, clean(add)]); setAdd(''); } }}>Add</button>
       </div>
     </div>
   );

@@ -248,6 +248,8 @@ td .strong { font-weight: 600; color: var(--text); }
 .call-hero { text-align: center; padding: 18px 8px; }
 .call-hero .co { font-size: 1.5rem; font-weight: 750; }
 .call-hero .ph { font-size: 1.15rem; color: var(--text-2); margin: 4px 0 14px; }
+.note-item { border-top: 1px solid var(--border); padding: 10px 0 4px; margin-top: 10px; }
+.note-item + .note-item { margin-top: 0; }
 .script { white-space: pre-wrap; font-size: 0.92rem; line-height: 1.55; background: var(--bg-2); border-radius: 10px; padding: 12px 14px; border: 1px solid var(--border); }
 
 .theme-swatch { border: 2px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; background: var(--surface-2); font: inherit; color: var(--text); font-size: 0.85rem; font-weight: 600; text-align: left; }

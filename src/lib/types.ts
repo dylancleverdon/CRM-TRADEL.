@@ -50,6 +50,8 @@ export interface Lead extends BaseRecord, Presence {
   notListedSince?: string;
   /** Set when you add it to "My queue" in Call Mode; cleared once a call is logged. */
   queuedAt?: string;
+  /** A call script just for this business (Call Mode → Script → Edit). Empty = your default script. */
+  script?: string;
 }
 
 export type ContactStatus = 'Prospect' | 'Active Client' | 'Past Client';
@@ -74,6 +76,7 @@ export interface Contact extends BaseRecord, Presence {
   nextFollowUpAt: string;
   notes: string;
   queuedAt?: string;
+  script?: string;
 }
 
 export interface Opportunity extends BaseRecord {

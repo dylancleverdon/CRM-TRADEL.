@@ -7,6 +7,7 @@ import { CALL_OUTCOMES, DEFAULT_SERVICES } from '../lib/constants';
 import { duration, formatPhone, fromLocalInput, toLocalInput } from '../lib/format';
 import { getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
 import { isAndroid, isDesktop, placeCall } from '../lib/platform';
+import { serviceList, toggleService } from '../lib/services';
 import { getSetting, store } from '../lib/store';
 import { Field, Modal, toast } from './ui';
 
@@ -205,7 +206,7 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
             {convert && (
               <div className="chips" style={{ marginTop: 10 }}>
                 {services.map((s) => (
-                  <button key={s} className={`chip ${service === s ? 'on' : ''}`} onClick={() => setService(s)}>{s}</button>
+                  <button key={s} className={`chip ${serviceList(service).includes(s) ? 'on' : ''}`} onClick={() => setService(toggleService(service, s))}>{s}</button>
                 ))}
               </div>
             )}

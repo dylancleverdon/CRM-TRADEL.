@@ -1,21 +1,22 @@
-import { BellRing, ExternalLink, ListPlus, Phone, RefreshCw, Search, SkipForward, StickyNote, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { BellRing, ExternalLink, ListPlus, Phone, RefreshCw, Search, SkipForward, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { startOfDay } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
-import { NotesCard, QuickLinks } from '../components/Detail';
+import { QuickLinks } from '../components/Detail';
 import { DeskPhoneToggle } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
+import { NotesFeed } from '../components/Notes';
 import { PresenceCard } from '../components/Presence';
+import { ScriptCard } from '../components/ScriptCard';
 import { Empty, Progress, QualityPill, StatusPill, toast } from '../components/ui';
 import { setLeadQuality, setQueued } from '../lib/actions';
 import {
   dayKey, dueNotShown, freshSession, loadSession, manualQueue, nextBatch, resolveSession, saveSession, withBatch,
   type CallSession, type CallType, type RecGetter,
 } from '../lib/callsession';
-import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_TRADES } from '../lib/constants';
-import { ago, fillTemplate, formatPhone, when } from '../lib/format';
-import { presenceLines } from '../lib/presence';
+import { DEFAULT_GOALS, DEFAULT_TRADES } from '../lib/constants';
+import { ago, formatPhone, when } from '../lib/format';
 import { buildCallQueue, dayStats, dncPhones } from '../lib/queue';
 import { getSetting, store, useSetting, useTable } from '../lib/store';
 import type { Contact, Lead } from '../lib/types';
@@ -29,10 +30,7 @@ export default function CallMode() {
   const tasks = useTable('tasks');
   const acts = useTable('activities');
   const [session, setSession] = useState<CallSession>(loadSession);
-  const [showScript, setShowScript] = useState(true);
   const { startCall, onLogged } = useCall();
-  const script = useSetting('callScript', DEFAULT_SCRIPT);
-  const myName = useSetting('myName', '');
   const goals = useSetting('goals', DEFAULT_GOALS);
   const trades = getSetting('trades', DEFAULT_TRADES);
   const trade = session.trade;
@@ -132,14 +130,12 @@ export default function CallMode() {
               </div>
             </div>
             <PresenceCard key={`p:${cur.type}:${cur.id}`} rec={rec} entity={{ type: cur.type, id: cur.id }} />
-            <NotesCard key={`${cur.type}:${cur.id}`} value={rec.notes} onSave={(v) => store.upsert(cur.type === 'lead' ? 'leads' : 'contacts', { id: cur.id, notes: v } as any)} />
+            <NotesFeed key={`n:${cur.type}:${cur.id}`} postTo={{ type: cur.type, id: cur.id }}
+              entities={[{ type: cur.type, id: cur.id }, ...(cur.type === 'contact' && rec.leadId ? [{ type: 'lead' as const, id: rec.leadId }] : [])]}
+              summary={rec.notes} onSummary={(v) => store.upsert(cur.type === 'lead' ? 'leads' : 'contacts', { id: cur.id, notes: v } as any)} />
           </div>
           <div className="stack">
-            <div className="card">
-              <div className="card-head"><StickyNote size={15} /><h3>Script</h3><button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={() => setShowScript(!showScript)}>{showScript ? 'Hide' : 'Show'}</button></div>
-              {showScript && <div className="script">{fillTemplate(script, { company: rec.company, trade: (rec.trade || 'home service').toLowerCase(), city: rec.city || 'your area', name: rec.contactName || 'there', myName: myName || 'me', ...presenceLines(rec) }, ['yelp', 'google'])}</div>}
-              <div className="faint" style={{ fontSize: '0.75rem', marginTop: 6 }}>Edit the script in Settings.</div>
-            </div>
+            <ScriptCard key={`s:${cur.type}:${cur.id}`} rec={rec} entity={{ type: cur.type, id: cur.id }} />
             <div className="card">
               <div className="card-head"><h3>Recent history</h3></div>
               {recent.length === 0 && <Empty>First touch.</Empty>}

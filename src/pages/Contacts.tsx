@@ -2,7 +2,8 @@ import { ArrowLeft, Briefcase, Phone, Plus, Search, StickyNote, Trash2 } from 'l
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
-import { InfoFields, NotesCard, QuickLinks } from '../components/Detail';
+import { InfoFields, QuickLinks } from '../components/Detail';
+import { NotesFeed } from '../components/Notes';
 import { Page } from '../components/Layout';
 import { NewOpportunity, OpportunityModal } from '../components/Opportunity';
 import { PresenceCard } from '../components/Presence';
@@ -15,6 +16,7 @@ import { isClosed, logActivity } from '../lib/actions';
 import { backfillAddress } from '../lib/email';
 import { CONTACT_STATUSES, DEFAULT_TRADES } from '../lib/constants';
 import { ago, formatPhone, money, shortDate } from '../lib/format';
+import { serviceLabel } from '../lib/services';
 import { getSetting, store, useRecord, useTable } from '../lib/store';
 import type { Contact } from '../lib/types';
 
@@ -162,7 +164,7 @@ export function ContactDetail() {
               <div className="list-item clickable" key={o.id} onClick={() => { params.set('opp', o.id); setParams(params); }}>
                 <div className="grow">
                   <div className="title">{o.name}</div>
-                  <div className="meta">{o.service} · {money(o.monthlyValue)}/mo{o.setupFee ? ` + ${money(o.setupFee)} setup` : ''}{o.nextStep ? ` · → ${o.nextStep}` : ''}</div>
+                  <div className="meta">{serviceLabel(o.service) || 'No service picked'} · {money(o.monthlyValue)}/mo{o.setupFee ? ` + ${money(o.setupFee)} setup` : ''}{o.nextStep ? ` · → ${o.nextStep}` : ''}</div>
                 </div>
                 <StatusPill status={o.stage} />
               </div>
@@ -190,7 +192,7 @@ export function ContactDetail() {
             {c.leadId && <div style={{ fontSize: '0.8rem', marginTop: 10 }}><Link to={`/leads/${c.leadId}`}>View original lead</Link></div>}
           </div>
           <PresenceCard rec={c} entity={entity} />
-          <NotesCard value={c.notes} onSave={(v) => save('notes', v)} />
+          <NotesFeed postTo={entity} entities={[entity, ...(c.leadId ? [{ type: 'lead' as const, id: c.leadId }] : [])]} summary={c.notes} onSummary={(v) => save('notes', v)} />
           <button className="btn bad sm" onClick={() => { if (confirm('Delete this contact?')) { store.remove('contacts', c.id); navigate('/contacts'); } }}><Trash2 size={14} /> Delete contact</button>
         </div>
         <div className="stack">
