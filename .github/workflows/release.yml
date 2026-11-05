@@ -5,7 +5,7 @@ name: Build & Release
 on:
   push:
     branches: [main, master, 'claude/admiring-knuth-2gio93']
-    paths-ignore: ['**.md']
+    paths-ignore: ['**.md', '.github/workflows/data-probe.yml', 'scripts/data_probe.py']
   workflow_dispatch:
 
 permissions:

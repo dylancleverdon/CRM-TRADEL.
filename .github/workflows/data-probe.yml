@@ -1,0 +1,12 @@
+name: Lead data probe
+# One-off/manual: inspects the public Washington datasets the Lead Finder uses
+# (column names, counts, sample rows) and searches the open-data catalogs.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/data_probe.py
