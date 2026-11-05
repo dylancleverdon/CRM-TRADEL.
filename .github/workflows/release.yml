@@ -119,6 +119,7 @@ jobs:
           V="${{ needs.version.outputs.version }}"
           cp scripts/install-mac.sh artifacts/install-mac.sh
           sed "s/__CODE_VERSION__/$V/" apps-script/Code.gs > artifacts/Code.gs
+          sed "s/__CODE_VERSION__/$V/" apps-script/Email.gs > artifacts/Email.gs
           printf '{"version":"%s","date":"%s","commit":"%s"}\n' "$V" "$(date -u +%FT%TZ)" "${GITHUB_SHA::7}" > artifacts/latest.json
           ls -la artifacts
       - uses: softprops/action-gh-release@v2
@@ -142,6 +143,7 @@ jobs:
             artifacts/install-mac.sh
             artifacts/latest.json
             artifacts/Code.gs
+            artifacts/Email.gs
       - name: Push the new sync code to the Google Sheet (auto-update loader)
         continue-on-error: true
         run: |

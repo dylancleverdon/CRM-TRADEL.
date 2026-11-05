@@ -10,6 +10,7 @@ import { Empty, Field, Modal, StatusPill, toast } from '../components/ui';
 import { convertLead, setLeadQuality, setLeadStatus } from '../lib/actions';
 import { DEFAULT_TRADES, DISQUALIFY_REASONS, LEAD_STATUSES, LEAD_STATUS_HELP } from '../lib/constants';
 import { ago, formatPhone, when } from '../lib/format';
+import { backfillAddress } from '../lib/email';
 import { missingInfo } from '../lib/leadmap';
 import { openExternal } from '../lib/platform';
 import { getSetting, store, useRecord } from '../lib/store';
@@ -25,7 +26,10 @@ export default function LeadDetail() {
 
   if (!lead) return <Page title="Lead not found"><Empty><Link to="/leads">Back to leads</Link></Empty></Page>;
   const entity = { type: 'lead' as const, id: lead.id };
-  const save = (k: string, v: string) => store.upsert('leads', { id: lead.id, [k]: v } as Partial<Lead>);
+  const save = (k: string, v: string) => {
+    store.upsert('leads', { id: lead.id, [k]: v } as Partial<Lead>);
+    if (k === 'email' && v) backfillAddress(v).then((n) => n && toast(`${n} past email${n === 1 ? '' : 's'} linked`)).catch(() => {});
+  };
 
   const convert = () => {
     const c = convertLead(lead);
@@ -76,7 +80,7 @@ export default function LeadDetail() {
             )}
           </div>
           <div className="card">
-            <div className="card-head"><h3>Details</h3><div className="actions"><QuickLinks rec={lead} /></div></div>
+            <div className="card-head"><h3>Details</h3><div className="actions"><QuickLinks rec={lead} entity={entity} /></div></div>
             <InfoFields rec={lead} onSave={save} fields={[
               { key: 'company', label: 'Company', full: true },
               { key: 'contactName', label: 'Contact name' },

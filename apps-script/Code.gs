@@ -25,7 +25,7 @@ var TABLES = {
   opportunities: ['id', 'contactId', 'name', 'service', 'stage', 'monthlyValue', 'setupFee', 'probability',
     'expectedCloseDate', 'nextStep', 'lostReason', 'closedAt', 'notes', 'createdAt', 'updatedAt', 'deleted', '_serverTime'],
   activities: ['id', 'entityType', 'entityId', 'entityName', 'type', 'outcome', 'notes', 'durationSec', 'phone',
-    'occurredAt', 'createdAt', 'updatedAt', 'deleted', '_serverTime'],
+    'occurredAt', 'createdAt', 'updatedAt', 'deleted', '_serverTime', 'threadId', 'messageId', 'direction', 'emailFrom', 'emailTo'],
   tasks: ['id', 'entityType', 'entityId', 'entityName', 'title', 'dueAt', 'priority', 'done', 'doneAt', 'notes',
     'createdAt', 'updatedAt', 'deleted', '_serverTime'],
   suggestions: ['id', 'page', 'suggestion', 'decision', 'decisionNotes', 'decidedAt', 'createdAt', 'updatedAt',
@@ -34,7 +34,7 @@ var TABLES = {
 };
 
 var DECISIONS = ['Pending', 'Approved', 'Rejected', 'Implemented', 'Duplicate'];
-var SETUP_VERSION = '2';
+var SETUP_VERSION = '3';
 var CODE_VERSION = '__CODE_VERSION__'; // stamped with the release version by CI
 
 /** Runs the full setup only once per script version (keeps every sync fast). */

@@ -6,6 +6,7 @@ import { Toaster } from './components/ui';
 import CallMode from './pages/CallMode';
 import { ContactDetail, ContactsList } from './pages/Contacts';
 import Dashboard from './pages/Dashboard';
+import EmailPage from './pages/EmailPage';
 import LeadDetail from './pages/LeadDetail';
 import LeadFinder from './pages/LeadFinder';
 import Leads from './pages/Leads';
@@ -16,7 +17,7 @@ import TasksPage from './pages/TasksPage';
 
 const PAGE_NAMES: [RegExp, string][] = [
   [/^\/$/, 'Dashboard'], [/^\/call/, 'Call Mode'], [/^\/leads\/.+/, 'Lead Detail'], [/^\/leads/, 'Leads'], [/^\/finder/, 'Lead Finder'],
-  [/^\/contacts\/.+/, 'Contact Detail'], [/^\/contacts/, 'Contacts'], [/^\/pipeline/, 'Pipeline'], [/^\/tasks/, 'Follow-ups'],
+  [/^\/contacts\/.+/, 'Contact Detail'], [/^\/contacts/, 'Contacts'], [/^\/pipeline/, 'Pipeline'], [/^\/tasks/, 'Follow-ups'], [/^\/email/, 'Email'],
   [/^\/suggestions/, 'Suggestions'], [/^\/settings/, 'Settings'],
 ];
 
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="/contacts/:id" element={<ContactDetail />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/email" element={<EmailPage />} />
             <Route path="/suggestions" element={<Suggestions />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

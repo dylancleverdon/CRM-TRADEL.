@@ -10,6 +10,7 @@ import { isClosed, stages } from '../lib/actions';
 import { DEFAULT_GOALS, outcomeDef } from '../lib/constants';
 import { duration, money, when } from '../lib/format';
 import { buildCallQueue, dayStats } from '../lib/queue';
+import { needsReply } from '../lib/emailmatch';
 import { useSetting, useTable } from '../lib/store';
 
 export default function Dashboard() {
@@ -52,7 +53,9 @@ export default function Dashboard() {
     const queue = buildCallQueue(leads, contacts, tasks);
     const outcomes: Record<string, number> = {};
     todayActs.filter((a) => a.type === 'call').forEach((a) => (outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1));
-    return { todayActs, s, overdue, dueToday, doneToday, qualified, disq, converted, newLeads, newOpps, openOpps, mrr, weighted, wonMonth, week, queue, outcomes, now };
+    const emailsSent = todayActs.filter((a) => a.type === 'email' && a.direction === 'out').length;
+    const replies = needsReply(acts);
+    return { emailsSent, replies, todayActs, s, overdue, dueToday, doneToday, qualified, disq, converted, newLeads, newOpps, openOpps, mrr, weighted, wonMonth, week, queue, outcomes, now };
   }, [acts, tasks, leads, contacts, opps]);
 
   const checklist = [
@@ -103,6 +106,7 @@ export default function Dashboard() {
               <MiniStat label="New leads added" value={d.newLeads} />
               <MiniStat label="New opportunities" value={d.newOpps} />
               <MiniStat label="Talk time" value={duration(d.s.talkSec) || '0m'} />
+              <MiniStat label="Emails sent" value={d.emailsSent} />
             </div>
           </div>
 
@@ -110,7 +114,8 @@ export default function Dashboard() {
             <div className="card-head"><Clock size={16} /><h3>Still to do</h3>
               <Link to="/tasks" className="faint" style={{ marginLeft: 'auto', fontSize: '0.8rem' }}>All follow-ups</Link>
             </div>
-            {d.overdue.length + d.dueToday.length === 0 && <Empty>Nothing due today. 🎉</Empty>}
+            {d.replies.length > 0 && <Link to="/email" className="list-item" style={{ color: 'inherit' }}><div className="grow"><div className="title" style={{ color: 'var(--warn)' }}>✉️ {d.replies.length} email repl{d.replies.length === 1 ? 'y' : 'ies'} waiting</div><div className="meta">{d.replies.slice(0, 3).map((r) => r.entityName).join(', ')}</div></div></Link>}
+            {d.overdue.length + d.dueToday.length === 0 && !d.replies.length && <Empty>Nothing due today. 🎉</Empty>}
             {d.overdue.slice(0, 6).map((t) => <TaskRow key={t.id} t={t} />)}
             {d.dueToday.slice(0, 8).map((t) => <TaskRow key={t.id} t={t} />)}
             {d.overdue.length + d.dueToday.length > 14 && <div className="faint" style={{ fontSize: '0.8rem', paddingTop: 8 }}>+{d.overdue.length + d.dueToday.length - 14} more</div>}

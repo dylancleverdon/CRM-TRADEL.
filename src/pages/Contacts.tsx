@@ -10,6 +10,7 @@ import { TasksPanel } from '../components/Tasks';
 import { Timeline } from '../components/Timeline';
 import { Empty, Field, Modal, StatusPill, toast } from '../components/ui';
 import { isClosed, logActivity } from '../lib/actions';
+import { backfillAddress } from '../lib/email';
 import { CONTACT_STATUSES, DEFAULT_TRADES } from '../lib/constants';
 import { ago, formatPhone, money, shortDate } from '../lib/format';
 import { getSetting, store, useRecord, useTable } from '../lib/store';
@@ -132,7 +133,10 @@ export function ContactDetail() {
   const trades = getSetting('trades', DEFAULT_TRADES);
   if (!c) return <Page title="Contact not found"><Empty><Link to="/contacts">Back to contacts</Link></Empty></Page>;
   const entity = { type: 'contact' as const, id: c.id };
-  const save = (k: string, v: string) => store.upsert('contacts', { id: c.id, [k]: v } as Partial<Contact>);
+  const save = (k: string, v: string) => {
+    store.upsert('contacts', { id: c.id, [k]: v } as Partial<Contact>);
+    if (k === 'email' && v) backfillAddress(v).then((n) => n && toast(`${n} past email${n === 1 ? '' : 's'} linked`)).catch(() => {});
+  };
   const openOpp = params.get('opp');
   const timelineEntities = [entity, ...(c.leadId ? [{ type: 'lead' as const, id: c.leadId }] : []), ...opps.map((o) => ({ type: 'opportunity' as const, id: o.id }))];
 
@@ -162,7 +166,7 @@ export function ContactDetail() {
             ))}
           </div>
           <div className="card">
-            <div className="card-head"><h3>Details</h3><div className="actions"><QuickLinks rec={c} /></div></div>
+            <div className="card-head"><h3>Details</h3><div className="actions"><QuickLinks rec={c} entity={entity} /></div></div>
             <div className="row" style={{ marginBottom: 12 }}>
               {CONTACT_STATUSES.map((s) => <button key={s} className={`chip ${c.status === s ? 'on' : ''}`} onClick={() => save('status', s)}>{s}</button>)}
             </div>

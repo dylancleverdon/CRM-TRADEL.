@@ -102,6 +102,12 @@ export interface Activity extends BaseRecord {
   durationSec: number;
   phone: string;
   occurredAt: string;
+  // email activities
+  threadId?: string;
+  messageId?: string;
+  direction?: 'in' | 'out';
+  emailFrom?: string;
+  emailTo?: string;
 }
 
 export interface Task extends BaseRecord {

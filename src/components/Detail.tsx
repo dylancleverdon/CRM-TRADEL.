@@ -1,5 +1,7 @@
 import { ExternalLink, Mail, MapPin } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import type { EntityType } from '../lib/types';
+import { EmailCompose } from './EmailCompose';
 import { openExternal } from '../lib/platform';
 import { Field, InlineInput } from './ui';
 
@@ -24,12 +26,14 @@ export function InfoFields({ rec, fields, onSave }: { rec: Record<string, any>; 
   );
 }
 
-export function QuickLinks({ rec }: { rec: { email?: string; website?: string; address?: string; city?: string; state?: string; company?: string } }) {
+export function QuickLinks({ rec, entity }: { rec: { email?: string; website?: string; address?: string; city?: string; state?: string; company?: string }; entity?: { type: EntityType; id: string } }) {
+  const [composing, setComposing] = useState(false);
   const site = rec.website ? (rec.website.startsWith('http') ? rec.website : `https://${rec.website}`) : '';
   const place = [rec.company, rec.address, rec.city, rec.state].filter(Boolean).join(' ');
   return (
     <div className="row wrap">
-      {rec.email && <button className="btn sm" onClick={() => openExternal(`mailto:${rec.email}`)}><Mail size={14} /> Email</button>}
+      {(rec.email || entity) && <button className="btn sm" onClick={() => (entity ? setComposing(true) : openExternal(`mailto:${rec.email}`))}><Mail size={14} /> Email</button>}
+      {composing && entity && <EmailCompose target={{ entity }} onClose={() => setComposing(false)} />}
       {site && <button className="btn sm" onClick={() => openExternal(site)}><ExternalLink size={14} /> Website</button>}
       {place && <button className="btn sm" onClick={() => openExternal(`https://www.google.com/maps/search/${encodeURIComponent(place)}`)}><MapPin size={14} /> Google Maps</button>}
     </div>
