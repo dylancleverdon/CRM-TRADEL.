@@ -8,12 +8,12 @@ import { EmailReader } from './EmailReader';
 import { MeetingActions, meetingRange } from './Meetings';
 import { Empty, Field, Modal } from './ui';
 
-const ICONS: Record<string, any> = {
+export const ICONS: Record<string, any> = {
   call: Phone, note: StickyNote, email: Mail, text: MessageSquare, meeting: Calendar, status: ArrowRightLeft,
   converted: UserCheck, opportunity: Briefcase, stage: ArrowRightLeft, task: CheckCircle2, created: Plus,
 };
 
-const LABEL: Record<string, string> = {
+export const LABEL: Record<string, string> = {
   call: 'Call', note: 'Note', email: 'Email', text: 'Text message', meeting: 'Meeting', status: 'Status change',
   converted: 'Converted', opportunity: 'Opportunity', stage: 'Stage change', task: 'Task', created: 'Created',
 };

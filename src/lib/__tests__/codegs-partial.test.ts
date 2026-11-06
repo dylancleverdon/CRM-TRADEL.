@@ -31,3 +31,18 @@ describe('Code.gs: the phone never dials a call the Mac gave up on', () => {
     expect(r2.ok).toBe(true);
   });
 });
+
+describe('Code.gs: screenshots on suggestions', () => {
+  it('puts the image in the Suggestion screenshots tab next to the suggestion, and needs the key once locked', () => {
+    const s = loadCodeGs();
+    const png = Buffer.from('fake-jpeg-bytes').toString('base64');
+    const r = s.handle({ action: 'screenshot', suggestionId: 'sg1', page: 'Leads', text: 'Erased lead', image: `data:image/jpeg;base64,${png}` });
+    expect(r).toEqual({ ok: true, row: 2 });
+    const tab = s.active.getSheetByName('Suggestion screenshots')!;
+    expect(tab.getRange(2, 1, 1, 4).getValues()[0].filter((_: any, i: number) => i !== 1)).toEqual(['sg1', 'Leads', 'Erased lead']);
+    expect((tab as any).images[0]).toMatchObject({ col: 5, row: 2 });
+    const key = (s.handle({ action: 'ping' }), s.props.get('tl_syncKey')!);
+    s.handle({ action: 'lock', key });
+    expect(s.handle({ action: 'screenshot', suggestionId: 'sg2', image: png })).toMatchObject({ ok: false, code: 'locked' });
+  });
+});

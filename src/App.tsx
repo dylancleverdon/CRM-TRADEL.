@@ -4,7 +4,9 @@ import { EmailAlerts } from './components/EmailAlerts';
 import { Layout } from './components/Layout';
 import { SuggestionBox } from './components/SuggestionBox';
 import { Toaster } from './components/ui';
+import CalendarPage from './pages/CalendarPage';
 import CallMode from './pages/CallMode';
+import HistoryPage from './pages/HistoryPage';
 import { ContactDetail, ContactsList } from './pages/Contacts';
 import Dashboard from './pages/Dashboard';
 import EmailPage from './pages/EmailPage';
@@ -44,6 +46,8 @@ export default function App() {
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/email" element={<EmailPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/history" element={<HistoryPage />} />
             <Route path="/suggestions" element={<Suggestions />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

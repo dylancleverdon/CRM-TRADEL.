@@ -36,12 +36,12 @@ var TABLES = {
   tasks: ['id', 'entityType', 'entityId', 'entityName', 'title', 'dueAt', 'priority', 'done', 'doneAt', 'notes',
     'createdAt', 'updatedAt', 'deleted', '_serverTime'],
   suggestions: ['id', 'page', 'suggestion', 'decision', 'decisionNotes', 'decidedAt', 'createdAt', 'updatedAt',
-    'deleted', '_serverTime'],
+    'deleted', '_serverTime', 'screenshot'],
   settings: ['id', 'value', 'updatedAt', 'deleted', '_serverTime']
 };
 
 var DECISIONS = ['Pending', 'Approved', 'Rejected', 'Implemented', 'Duplicate'];
-var SETUP_VERSION = '11';
+var SETUP_VERSION = '12';
 var CODE_VERSION = '__CODE_VERSION__'; // stamped with the release version by CI
 
 /** Runs the full setup only once per script version (keeps every sync fast). */
@@ -113,6 +113,7 @@ function handle_(body) {
     if (body.action === 'callRequest') return callRequest_(body);
     if (body.action === 'callPoll') return callPoll_(body);
     if (body.action === 'callCancel') return callCancel_(body);
+    if (body.action === 'screenshot') return screenshot_(body);
     return { ok: false, error: 'Unknown action' };
   } catch (err) {
     return { ok: false, error: String(err && err.stack || err) };
@@ -431,6 +432,31 @@ function callRequest_(body) {
   props.setProperty('callRequest', JSON.stringify(req));
   var seen = Number(props.getProperty('phoneSeen') || 0);
   return { ok: true, id: req.id, serverTime: req.at, phoneSeenAgo: seen ? req.at - seen : -1 };
+}
+
+var SHOT_TAB = 'Suggestion screenshots';
+
+/** A screenshot attached to a suggestion: a row in the screenshots tab with the image beside it. */
+function screenshot_(body) {
+  var b64 = String(body.image || '').replace(/^data:image\/[a-z]+;base64,/, '');
+  if (!b64) return { ok: false, error: 'No image' };
+  if (b64.length > 2600000) return { ok: false, error: 'Image too big' };
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(SHOT_TAB) || ss.insertSheet(SHOT_TAB);
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, 4).setValues([['suggestionId', 'added', 'page', 'suggestion']]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  var row = sh.getLastRow() + 1;
+  sh.getRange(row, 1, 1, 4).setValues([[String(body.suggestionId || ''), new Date().toISOString(), String(body.page || ''), String(body.text || '').slice(0, 500)]]);
+  sh.setRowHeight(row, 240);
+  var blob = Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', 'screenshot-' + String(body.suggestionId || row) + '.jpg');
+  var img = sh.insertImage(blob, 5, row);
+  try {
+    var scale = Math.min(1, 230 / img.getHeight());
+    img.setHeight(Math.round(img.getHeight() * scale)).setWidth(Math.round(img.getWidth() * scale));
+  } catch (e) { /* keep its own size */ }
+  return { ok: true, row: row };
 }
 
 /** A call request the phone hasn't picked up within this long is dropped (the Mac tells you to try again). */

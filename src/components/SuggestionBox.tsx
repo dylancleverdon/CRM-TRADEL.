@@ -1,5 +1,6 @@
-import { Lightbulb, Send } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ImagePlus, Lightbulb, Send, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { attachScreenshot, shrinkImage } from '../lib/screenshots';
 import { Link } from 'react-router-dom';
 import { store, useTable } from '../lib/store';
 import { StatusPill, toast } from './ui';
@@ -33,11 +34,23 @@ export function SuggestionBox({ page }: { page: string }) {
   const all = useTable('suggestions');
   const forPage = all.filter((s) => s.page === page);
   const similar = useMemo(() => similarSuggestions(text, all), [text, all]);
+  const [shot, setShot] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const takeImage = async (f: Blob | null | undefined) => {
+    if (!f) return;
+    try { setShot(await shrinkImage(f)); } catch (e: any) { toast(e?.message || String(e)); }
+  };
 
   const submit = () => {
     if (!text.trim()) return;
-    store.upsert('suggestions', { page, suggestion: text.trim(), decision: 'Pending', decisionNotes: '', decidedAt: '' });
+    const s = store.upsert('suggestions', { page, suggestion: text.trim(), decision: 'Pending', decisionNotes: '', decidedAt: '' });
+    if (shot) {
+      attachScreenshot(s.id, page, text.trim(), shot)
+        .then((n) => toast(n ? '📎 Screenshot added to the Suggestion screenshots tab' : '📎 Screenshot saved here; it goes to the sheet next time you are online'))
+        .catch(() => {});
+    }
     setText('');
+    setShot('');
     setOpen(false);
     toast('Suggestion saved to the Suggestions sheet');
   };
@@ -55,8 +68,9 @@ export function SuggestionBox({ page }: { page: string }) {
         <div className="col">
           <div className="row"><Lightbulb size={16} color="var(--warn)" /><b style={{ fontSize: '0.9rem' }}>Suggestion for the {page} page</b></div>
           <textarea autoFocus rows={3} value={text} onChange={(e) => setText(e.target.value)} enterKeyHint="send"
+            onPaste={(e) => { const f = [...e.clipboardData.items].find((i) => i.type.startsWith('image/'))?.getAsFile(); if (f) { e.preventDefault(); takeImage(f); } }}
             onKeyDown={(e) => { if (submitsOnEnter(e)) { e.preventDefault(); submit(); } }}
-            placeholder="What would make this page better? Press Enter to submit (Shift+Enter for a new line). It goes into the Suggestions tab of the Google Sheet for review." />
+            placeholder="What would make this page better? Press Enter to submit (Shift+Enter for a new line). Paste a screenshot here to attach it. It goes into the Suggestions tab of the Google Sheet for review." />
           {similar.length > 0 && (
             <div className="card" style={{ background: 'var(--warn-soft)', padding: 10 }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 650, marginBottom: 6 }}>Similar suggestions already exist:</div>
@@ -67,7 +81,15 @@ export function SuggestionBox({ page }: { page: string }) {
               ))}
             </div>
           )}
+          {shot && (
+            <div className="row" style={{ gap: 8 }}>
+              <img src={shot} alt="Screenshot to attach" style={{ maxHeight: 90, maxWidth: 200, borderRadius: 8, border: '1px solid var(--border)' }} />
+              <button className="btn ghost sm" onClick={() => setShot('')}><X size={13} /> Remove</button>
+            </div>
+          )}
           <div className="row">
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { takeImage(e.target.files?.[0]); e.target.value = ''; }} />
+            <button className="btn ghost sm" onClick={() => fileRef.current?.click()} title="Or paste a screenshot into the box"><ImagePlus size={14} /> {shot ? 'Change screenshot' : 'Add screenshot'}</button>
             <span className="spacer" />
             <button className="btn ghost sm" onClick={() => setOpen(false)}>Cancel</button>
             <button className="btn primary sm" onClick={submit}><Send size={14} /> Submit</button>

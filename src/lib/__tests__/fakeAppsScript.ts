@@ -62,6 +62,14 @@ export class FakeSheet {
   }
   setFrozenRows() {}
   setColumnWidth() {}
+  setRowHeight() {}
+  images: { bytes: number; col: number; row: number }[] = [];
+  insertImage(blob: any, col: number, row: number) {
+    this.images.push({ bytes: blob.bytes.length, col, row });
+    let h = 800, w = 1200;
+    const img: any = { getHeight: () => h, getWidth: () => w, setHeight: (x: number) => { h = x; return img; }, setWidth: (x: number) => { w = x; return img; } };
+    return img;
+  }
   clear() { this.cells = []; }
 }
 
@@ -117,7 +125,11 @@ export function loadCodeGs() {
       },
     },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-    Utilities: { getUuid: () => randomUUID() },
+    Utilities: {
+      getUuid: () => randomUUID(),
+      base64Decode: (s: string) => Array.from(Buffer.from(s, 'base64')),
+      newBlob: (bytes: number[], type: string, name: string) => ({ bytes, type, name }),
+    },
     ContentService: { createTextOutput: (t: string) => ({ setMimeType: () => t }), MimeType: { JSON: 'json' } },
   };
   vm.createContext(ctx);

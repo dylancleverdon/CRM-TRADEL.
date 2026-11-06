@@ -102,6 +102,9 @@ export function setSyncUrl(url: string) {
   setState({ status: 'idle', error: '' });
 }
 
+/** Any sheet action (sends the sync key; handles the lock like sync does). */
+export const sheetAction = (body: object) => call(body);
+
 async function call(body: object) {
   const url = getSyncUrl();
   const res = await httpRequest(url, 'POST', JSON.stringify(withAuth(body)));
