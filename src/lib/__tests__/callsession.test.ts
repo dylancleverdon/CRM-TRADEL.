@@ -108,3 +108,16 @@ describe('locked call session', () => {
     expect(batch.some((b) => first.includes(b.id))).toBe(false);
   });
 });
+
+import { newerSession as newer } from '../callsession';
+describe('same queue on the phone and the Mac', () => {
+  it('follows whichever device changed it last, never an old day', () => {
+    const base = { day: dayKeyToday(), trade: '', items: [], skipped: [], dismissed: [], currentId: '' };
+    const local = { ...base, savedAt: '2026-11-06T10:00:00.000Z' };
+    expect(newer(local, { ...base, skipped: ['x'], savedAt: '2026-11-06T10:05:00.000Z' })?.skipped).toEqual(['x']);
+    expect(newer(local, { ...base, savedAt: '2026-11-06T09:00:00.000Z' })).toBeNull();
+    expect(newer(local, { ...base, day: '2020-01-01', savedAt: '2026-11-06T11:00:00.000Z' })).toBeNull();
+    expect(newer(local, null)).toBeNull();
+  });
+});
+function dayKeyToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }

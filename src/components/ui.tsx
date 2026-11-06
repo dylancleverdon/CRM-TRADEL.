@@ -3,8 +3,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { LeadStatus } from '../lib/types';
 
-export function Modal({ title, onClose, children, footer, wide }: {
-  title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean;
+export function Modal({ title, onClose, children, footer, wide, xwide }: {
+  title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; xwide?: boolean;
 }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -13,7 +13,7 @@ export function Modal({ title, onClose, children, footer, wide }: {
   }, [onClose]);
   return createPortal(
     <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? 'wide' : ''}`}>
+      <div className={`modal ${wide ? 'wide' : ''} ${xwide ? 'xwide' : ''}`}>
         <div className="modal-head">
           <h2 style={{ flex: 1 }}>{title}</h2>
           <button className="btn ghost icon" onClick={onClose} aria-label="Close"><X size={18} /></button>

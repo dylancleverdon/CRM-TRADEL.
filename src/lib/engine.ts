@@ -216,14 +216,6 @@ export function leadValueEstimate(model: EngineModel, tr: Record<TraitName, stri
   return model.overall * Math.exp(DAMP * log);
 }
 
-/** How little it knows about a lead's kind of business: higher = more worth an experiment. */
-function unknownness(model: EngineModel, tr: Record<TraitName, string>, combos: Map<string, number>): number {
-  const combo = 1 / Math.sqrt(1 + (combos.get(comboKey(tr)) || 0));
-  let traits = 0;
-  for (const t of EXPLORE) traits += 1 / Math.sqrt(1 + (model.by[t].get(tr[t])?.dials || 0));
-  return combo + (0.5 * traits) / EXPLORE.length;
-}
-
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 /** "Proven · HVAC, Licensed < 3 mo: 4 meetings / 50 dials", or '' if no trait is proven yet. */
@@ -270,19 +262,39 @@ export function rankQueue(items: QueueItem[], model: EngineModel, getLead: (id: 
   const used = new Set<string>();
   const combos = new Map(model.combos);
   const out: RankedItem[] = [...followUps];
+  // Experiments: grouped by trade + city, so each pick looks at a few hundred groups instead of every business.
+  type R = (typeof rest)[number];
+  const groups = new Map<string, { list: (R & { extra: number })[]; at: number }>();
+  if (share > 0) {
+    for (const r of rest) {
+      let traits = 0;
+      for (const t of EXPLORE) traits += 1 / Math.sqrt(1 + (model.by[t].get(r.tr[t])?.dials || 0));
+      const k = comboKey(r.tr);
+      const g = groups.get(k) || { list: [], at: 0 };
+      g.list.push({ ...r, extra: (0.5 * traits) / EXPLORE.length });
+      groups.set(k, g);
+    }
+    for (const g of groups.values()) g.list.sort((a, b) => b.extra - a.extra || b.value - a.value || a.i - b.i);
+  }
+  const pickExperiment = (): R | null => {
+    let best: (R & { extra: number }) | null = null;
+    let bestU = -1;
+    for (const [k, g] of groups) {
+      while (g.at < g.list.length && used.has(g.list[g.at].item.id)) g.at++;
+      const r = g.list[g.at];
+      if (!r) continue;
+      const u = 1 / Math.sqrt(1 + (combos.get(k) || 0)) + r.extra;
+      if (u > bestU + 1e-12 || (best && Math.abs(u - bestU) <= 1e-12 && (r.value > best.value || (r.value === best.value && r.i < best.i)))) { best = r; bestU = u; }
+    }
+    return best;
+  };
   let p = 0;
   let acc = 0;
   for (let slot = 0; slot < Math.min(head, rest.length); slot++) {
     acc += share;
     if (acc >= 1 - 1e-9) {
       acc -= 1;
-      let best: (typeof rest)[number] | null = null;
-      let bestU = -1;
-      for (const r of rest) {
-        if (used.has(r.item.id)) continue;
-        const u = unknownness(model, r.tr, combos);
-        if (u > bestU + 1e-12 || (Math.abs(u - bestU) <= 1e-12 && best && r.value > best.value)) { best = r; bestU = u; }
-      }
+      const best = pickExperiment();
       if (best) {
         used.add(best.item.id);
         out.push({ ...best.item, pick: 'experiment', reason: experimentWhy(best.tr, combos), value: best.value });

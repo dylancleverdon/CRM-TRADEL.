@@ -44,7 +44,7 @@ class Store {
   setVirtualLeads(map: Map<string, AnyRec>) {
     this.virtualLeads = map;
     this.repairLeads();
-    this.emit();
+    this.emit(['leads', 'activities']);
   }
 
   /**
@@ -89,8 +89,12 @@ class Store {
     return () => this.listeners.delete(fn);
   };
 
-  emit() {
+  /** Per-table versions: a list only changes identity when its own table changed (keeps screens from redoing work). */
+  tableVersion: Record<string, number> = {};
+
+  emit(tables?: TableName[]) {
     this.version++;
+    for (const t of tables || TABLES) this.tableVersion[t] = (this.tableVersion[t] || 0) + 1;
     this.listeners.forEach((l) => l());
   }
 
@@ -109,7 +113,8 @@ class Store {
   list<T extends TableName>(t: T, includeDeleted = false): RecordMap[T][] {
     const key = t + (includeDeleted ? ':all' : '');
     const c = this.cache.get(key);
-    if (c && c.v === this.version) return c.list;
+    const tv = this.tableVersion[t] || 0;
+    if (c && c.v === tv) return c.list;
     let list = Array.from(this.data[t].values()).filter((r) => includeDeleted || !r.deleted) as any[];
     if (t === 'leads' && this.virtualLeads.size) {
       const real = this.data.leads;
@@ -117,7 +122,7 @@ class Store {
       for (const [id, v] of this.virtualLeads) if (!real.has(id)) extra.push(v);
       list = list.concat(extra);
     }
-    this.cache.set(key, { v: this.version, list });
+    this.cache.set(key, { v: tv, list });
     return list;
   }
 
@@ -142,7 +147,7 @@ class Store {
     const merged = { ...base, ...rec, id, updatedAt: ts } as AnyRec;
     this.data[t].set(id, merged);
     this.dirty[t].add(id);
-    this.emit();
+    this.emit([t]);
     this.scheduleSave();
     this.onLocalChange?.();
     return merged as any;
@@ -176,7 +181,7 @@ class Store {
       changed = true;
     }
     if (changed) {
-      this.emit();
+      this.emit([t]);
       this.scheduleSave();
     }
   }

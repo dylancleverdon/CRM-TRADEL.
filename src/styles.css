@@ -328,3 +328,10 @@ td .strong { font-weight: 600; color: var(--text); }
 .slot-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .slot-legend i.slot { display: inline-block; width: 16px; height: 12px; padding: 0; border-radius: 3px; }
 .meet-picked { font-size: 0.88rem; font-weight: 650; color: var(--text); }
+
+/* ---------- call outcome with the call brief beside it (Mac) ---------- */
+.modal.xwide { max-width: 1180px; }
+.call-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+.call-brief { display: flex; flex-direction: column; gap: 12px; }
+@media (min-width: 1001px) { .call-grid > :first-child { position: sticky; top: 0; max-height: calc(100vh - 190px); overflow-y: auto; } }
+@media (max-width: 1000px) { .call-grid { grid-template-columns: minmax(0, 1fr); } }

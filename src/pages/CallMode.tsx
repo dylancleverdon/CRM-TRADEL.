@@ -3,6 +3,7 @@ import { startOfDay } from 'date-fns';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
+import { BriefDetails } from '../components/CallBrief';
 import { QuickLinks } from '../components/Detail';
 import { DeskPhoneToggle } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
@@ -14,7 +15,7 @@ import { TextCompose } from '../components/TextCompose';
 import { Empty, Progress, QualityPill, StatusPill, toast } from '../components/ui';
 import { setLeadQuality, setQueued } from '../lib/actions';
 import {
-  dayKey, dueNotShown, freshSession, loadSession, manualQueue, nextBatch, resolveSession, saveSession, withBatch,
+  dayKey, dueNotShown, freshSession, loadSession, manualQueue, newerSession, nextBatch, resolveSession, saveSession, withBatch,
   type CallSession, type CallType, type RecGetter,
 } from '../lib/callsession';
 import { DEFAULT_GOALS, DEFAULT_TRADES } from '../lib/constants';
@@ -23,7 +24,7 @@ import { callModeKey } from '../lib/keys';
 import { useEngineModel } from '../lib/useEngine';
 import { ago, formatPhone, when } from '../lib/format';
 import { buildCallQueue, dayStats, dncPhones } from '../lib/queue';
-import { getSetting, store, useSetting, useTable } from '../lib/store';
+import { getSetting, setSetting, store, useSetting, useTable } from '../lib/store';
 import type { Contact, Lead } from '../lib/types';
 
 const getRec: RecGetter = (type, id) => (type === 'lead' ? store.get('leads', id) : store.get('contacts', id));
@@ -34,7 +35,18 @@ export default function CallMode() {
   const contacts = useTable('contacts');
   const tasks = useTable('tasks');
   const acts = useTable('activities');
-  const [session, setSession] = useState<CallSession>(loadSession);
+  const [session, setSessionRaw] = useState<CallSession>(() => {
+    const local = loadSession();
+    return newerSession(local, getSetting<CallSession | null>('callSession', null)) || local;
+  });
+  // Every change is stamped, saved here and shared through the sheet, so the phone and Mac show the same queue.
+  const setSession = (fn: CallSession | ((s: CallSession) => CallSession)) =>
+    setSessionRaw((s) => ({ ...(typeof fn === 'function' ? fn(s) : fn), savedAt: new Date().toISOString() }));
+  const remoteSession = useSetting<CallSession | null>('callSession', null);
+  useEffect(() => {
+    const n = newerSession(session, remoteSession);
+    if (n) setSessionRaw(n);
+  }, [remoteSession?.savedAt]);
   const [texting, setTexting] = useState(false);
   const { startCall, onLogged, onNext } = useCall();
   const goals = useSetting('goals', DEFAULT_GOALS);
@@ -75,7 +87,10 @@ export default function CallMode() {
     pendingNext.current = null;
     startCall({ type: cur.type, id: cur.id }, undefined, cur.pick);
   }, [cur?.id]);
-  useEffect(() => saveSession(session), [session]);
+  useEffect(() => {
+    saveSession(session);
+    if (session.savedAt && getSetting<CallSession | null>('callSession', null)?.savedAt !== session.savedAt) setSetting('callSession', session);
+  }, [session]);
   // A new day starts a new session.
   useEffect(() => { if (session.day !== dayKey()) setSession(freshSession(session.trade)); });
   // When this batch is used up, lock in the next one.
@@ -88,7 +103,8 @@ export default function CallMode() {
   }, [view.lockedLeft, auto]);
   // Remember which business is on screen, so it stays until you call or skip it.
   useEffect(() => {
-    if ((cur?.id || '') !== session.currentId) setSession((s) => ({ ...s, currentId: cur?.id || '' }));
+    // Not stamped: what this device can show isn't a change to share (avoids the two devices taking turns).
+    if ((cur?.id || '') !== session.currentId) setSessionRaw((s) => ({ ...s, currentId: cur?.id || '' }));
   }, [cur?.id]);
 
   const skip = () => {
@@ -124,6 +140,21 @@ export default function CallMode() {
   };
 
   const rec: any = cur ? getRec(cur.type, cur.id) : null;
+  // The last few businesses called today, so one you hung up on too fast can go straight back in the queue.
+  const calledToday = useMemo(() => {
+    const sod = startOfDay(new Date()).toISOString();
+    const seen = new Set<string>();
+    const out: { type: CallType; id: string; company: string; outcome: string; at: string; queued: boolean }[] = [];
+    for (const a of [...acts].filter((x) => x.type === 'call' && x.occurredAt >= sod && (x.entityType === 'lead' || x.entityType === 'contact'))
+      .sort((x, y) => y.occurredAt.localeCompare(x.occurredAt))) {
+      if (seen.has(a.entityId) || out.length >= 4) continue;
+      seen.add(a.entityId);
+      const r: any = getRec(a.entityType as CallType, a.entityId);
+      if (!r || r.id === cur?.id) continue;
+      out.push({ type: a.entityType as CallType, id: a.entityId, company: r.company || a.entityName, outcome: a.outcome, at: a.occurredAt, queued: !!r.queuedAt });
+    }
+    return out;
+  }, [acts, leads, contacts, cur?.id]);
   const recent = cur ? acts.filter((a) => a.entityId === cur.id).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 4) : [];
 
   return (
@@ -199,6 +230,7 @@ export default function CallMode() {
               </div>
             </div>
             <PresenceCard key={`p:${cur.type}:${cur.id}`} rec={rec} entity={{ type: cur.type, id: cur.id }} />
+            <BriefDetails key={`d:${cur.type}:${cur.id}`} entity={{ type: cur.type, id: cur.id }} />
             <NotesFeed key={`n:${cur.type}:${cur.id}`} postTo={{ type: cur.type, id: cur.id }}
               entities={[{ type: cur.type, id: cur.id }, ...(cur.type === 'contact' && rec.leadId ? [{ type: 'lead' as const, id: rec.leadId }] : [])]}
               summary={rec.notes} onSummary={(v) => store.upsert(cur.type === 'lead' ? 'leads' : 'contacts', { id: cur.id, notes: v } as any)} />
@@ -237,6 +269,15 @@ export default function CallMode() {
                 </div>
               ))}
               {view.manual.length + view.locked.length === 0 && <Empty>Nothing else queued.</Empty>}
+              {calledToday.length > 0 && <div className="faint" style={sectionLabel}>Called today</div>}
+              {calledToday.map((c) => (
+                <div className="list-item" key={c.id}>
+                  <div className="grow"><div className="title" style={{ fontSize: '0.88rem' }}>{c.company}</div><div className="meta">{c.outcome} · {when(c.at)}</div></div>
+                  {c.queued ? <span className="pill accent">Queued</span>
+                    : <button className="btn ghost sm" title="Put it back at the front of your queue" onClick={() => { setQueued({ type: c.type, id: c.id }, true); toast(`${c.company} is back in your queue`); }}>
+                      <RefreshCw size={13} /> Call again</button>}
+                </div>
+              ))}
               {view.removed.length > 0 && (
                 <div className="faint" style={{ fontSize: '0.75rem', marginTop: 8 }}>
                   Taken off: {view.removed.slice(-3).map((r) => `${r.company} (${r.reason})`).join(', ')}

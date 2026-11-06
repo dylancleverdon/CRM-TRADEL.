@@ -16,6 +16,7 @@ import { callLogSeconds, guessTalkSec } from '../lib/talktime';
 import { fillText, getFollowUpText, sendFollowUpText } from '../lib/texts';
 import { serviceList, toggleService } from '../lib/services';
 import { getSetting, store } from '../lib/store';
+import { CallBrief } from './CallBrief';
 import { MeetingPicker } from './MeetingPicker';
 import { Field, Modal, toast } from './ui';
 
@@ -173,6 +174,8 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
   };
 
   const inviting = outcome === 'Meeting Booked' && canInvite && invite;
+  // On the Mac: the script, Yelp/Google and details beside the form, so they stay in view during the call.
+  const brief = !isAndroid() && (call.entity.type === 'lead' || call.entity.type === 'contact');
   const pickSlot = (p: MeetingPick | null) => {
     setSlot(p);
     if (p) { setFollowUp(toLocalInput(p.start.toISOString())); setFollowTitle('Discovery call'); } // the follow-up is the meeting
@@ -247,6 +250,7 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
       const open = document.querySelectorAll('.modal-back');
       if (!mine || open[open.length - 1] !== mine) return; // another window is open on top of this one
       const t = e.target as HTMLElement | null;
+      if (t?.closest?.('.call-brief')) return; // the script / details beside the form handle their own keys
       const typing = isTyping(t);
       if (e.key === 'Escape' && typing) {
         e.preventDefault(); e.stopPropagation(); t?.blur();
@@ -272,7 +276,8 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
 
   return (
     <Modal
-      wide={inviting}
+      xwide={brief}
+      wide={inviting && !brief}
       title={<span className="row"><Phone size={18} /> Call outcome — {call.name}</span>}
       onClose={onCancel}
       footer={<>
@@ -283,6 +288,8 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
         </> : <button className="btn primary" onClick={() => save(false)} title="Enter">Save outcome</button>}
       </>}
     >
+      <div className={brief ? 'call-grid' : ''}>
+      {brief && <div className="hide-mobile"><CallBrief entity={call.entity as { type: 'lead' | 'contact'; id: string }} /></div>}
       <div className="stack" ref={bodyRef}>
         <div className="row muted" style={{ fontSize: '0.85rem' }}>
           <span>{formatPhone(call.phone)}</span><span>•</span>
@@ -368,6 +375,7 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
           <kbd className="key">1</kbd>–<kbd className="key">0</kbd> outcome · <kbd className="key">N</kbd> notes ·{' '}
           <kbd className="key">Enter</kbd> {canNext ? 'save and call next' : 'save'} · <kbd className="key">Shift</kbd>+<kbd className="key">Enter</kbd> new line · <kbd className="key">Esc</kbd> discard
         </div>
+      </div>
       </div>
     </Modal>
   );

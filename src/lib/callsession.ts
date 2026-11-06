@@ -35,6 +35,8 @@ export interface CallSession {
   dismissed: string[];
   /** The business on screen. It stays there until it's called, skipped or taken off. */
   currentId: string;
+  /** When it last changed, so the phone and the Mac follow whichever changed it last. */
+  savedAt?: string;
 }
 
 export interface ManualRef { type: CallType; id: string; queuedAt: string }
@@ -84,6 +86,13 @@ export function loadSession(): CallSession {
 
 export function saveSession(s: CallSession) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ }
+}
+
+/** Same session on the phone and the Mac: the newer one wins (a different day never counts). */
+export function newerSession(local: CallSession, remote: CallSession | null | undefined): CallSession | null {
+  if (!remote || !Array.isArray(remote.items) || remote.day !== dayKey()) return null;
+  if ((remote.savedAt || '') <= (local.savedAt || '')) return null;
+  return { ...freshSession(remote.trade || ''), ...remote };
 }
 
 /** Leads and contacts you added to My queue, oldest first. */
