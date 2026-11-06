@@ -3,6 +3,7 @@ vi.mock('idb-keyval', () => ({ get: vi.fn(async () => undefined), set: vi.fn(asy
 const net = vi.hoisted(() => ({ calls: [] as any[], replies: [] as any[], sent: [] as any[], failSend: false }));
 vi.mock('../email', () => ({
   emailConnected: () => true,
+  mailboxEmail: () => 'dylan@tradelink.marketing',
   connectorCall: vi.fn(async (body: any) => { net.calls.push(body); return net.replies.shift() ?? { ok: true }; }),
   sendEmail: vi.fn(async (a: any) => { if (net.failSend) throw new Error('Gmail said no'); net.sent.push(a); return {}; }),
 }));
@@ -13,7 +14,7 @@ vi.hoisted(() => {
 });
 
 import { addTask } from '../actions';
-import { bookMeeting, cancelMeeting, daySlots, DEFAULT_MEETINGS, meetingSettings, meetingWhen, rescheduleMeeting, upcomingMeetings, withMeeting } from '../meetings';
+import { bookMeeting, cancelMeeting, daySlots, DEFAULT_MEETINGS, joinUrl, meetingSettings, meetingWhen, rescheduleMeeting, upcomingMeetings, withMeeting } from '../meetings';
 import { store } from '../store';
 
 const tue = new Date(2026, 10, 10); // Tuesday, Nov 10 2026 (local)
@@ -96,7 +97,9 @@ describe('booking, moving and cancelling', () => {
     expect(net.sent[0].body).toMatch(/Hi Juan,\n\nThanks for making time/);
     expect(store.get('leads', 'MB1')!.email).toBe('juan@afa.com'); // remembered for next time
     const m = store.list('activities').find((a) => a.type === 'meeting' && a.entityId === 'MB1')!;
-    expect(m).toMatchObject({ outcome: 'Scheduled', eventId: 'ev1', meetLink: 'https://meet.google.com/abc', emailTo: 'juan@afa.com', occurredAt: pick.start.toISOString(), endAt: pick.end.toISOString() });
+    expect(m).toMatchObject({ outcome: 'Scheduled', eventId: 'ev1', meetLink: 'https://meet.google.com/abc', emailTo: 'juan@afa.com', emailFrom: 'dylan@tradelink.marketing',
+      occurredAt: pick.start.toISOString(), endAt: pick.end.toISOString() });
+    expect(net.sent[0].body).not.toContain('authuser'); // the client's email has the plain link
     expect(upcomingMeetings(store.list('activities'), at(9).getTime()).map((a) => a.id)).toContain(m.id);
   });
 
@@ -126,5 +129,14 @@ describe('booking, moving and cancelling', () => {
     expect(store.get('activities', m.id)!.outcome).toBe('Cancelled');
     expect(store.get('tasks', task.id)!.done).toBe(true);
     expect(upcomingMeetings(store.list('activities'), at(9).getTime()).map((a) => a.id)).not.toContain(m.id);
+  });
+});
+
+describe('joining', () => {
+  it('opens Meet as the account that owns the meeting, not the browser\'s first account', () => {
+    expect(joinUrl('https://meet.google.com/abc-defg-hij', 'dylan@tradelink.marketing')).toBe('https://meet.google.com/abc-defg-hij?authuser=dylan%40tradelink.marketing');
+    expect(joinUrl('https://meet.google.com/abc-defg-hij?hs=122', 'dylan@tradelink.marketing')).toBe('https://meet.google.com/abc-defg-hij?hs=122&authuser=dylan%40tradelink.marketing');
+    expect(joinUrl('https://meet.google.com/abc-defg-hij', '')).toBe('https://meet.google.com/abc-defg-hij');
+    expect(joinUrl('', 'dylan@tradelink.marketing')).toBe('');
   });
 });

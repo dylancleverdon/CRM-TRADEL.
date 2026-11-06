@@ -39,6 +39,8 @@ export const useEmail = () =>
   useSyncExternalStore((fn) => { listeners.add(fn); return () => listeners.delete(fn); }, () => state);
 
 export const getEmailUrl = () => localStorage.getItem(LS_URL) || '';
+/** The mailbox your email connector runs as (meetings are booked on its Google Calendar). */
+export const mailboxEmail = () => String(state.me || localStorage.getItem('tl.emailMe') || '').trim().toLowerCase();
 export const emailConnected = () => !!getEmailUrl();
 
 /** A request to the private email connector (also used for follow-up texts). */

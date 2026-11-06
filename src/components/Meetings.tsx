@@ -3,7 +3,8 @@ import { format, isToday, isTomorrow } from 'date-fns';
 import { CalendarClock, CalendarX, Video } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { cancelMeeting, isLiveMeeting, meetingWhen, rescheduleMeeting, upcomingMeetings, type Pick } from '../lib/meetings';
+import { mailboxEmail } from '../lib/email';
+import { cancelMeeting, isLiveMeeting, joinUrl, meetingWhen, rescheduleMeeting, upcomingMeetings, type Pick } from '../lib/meetings';
 import { openExternal } from '../lib/platform';
 import { useTable } from '../lib/store';
 import type { Activity } from '../lib/types';
@@ -29,7 +30,14 @@ export function MeetingActions({ a, compact }: { a: Activity; compact?: boolean 
   return (
     <>
       <div className="row wrap" style={{ gap: 6, marginTop: compact ? 0 : 6 }} onClick={(e) => e.stopPropagation()}>
-        {a.meetLink && <button className="btn sm primary" onClick={() => openExternal(a.meetLink!)}><Video size={13} /> Join</button>}
+        {a.meetLink && (() => {
+          const account = a.emailFrom || mailboxEmail();
+          return (
+            <button className="btn sm primary" title={account ? `Opens Google Meet as ${account}` : undefined} onClick={() => openExternal(joinUrl(a.meetLink!, account))}>
+              <Video size={13} /> Join
+            </button>
+          );
+        })()}
         <button className="btn sm" disabled={busy} onClick={() => setMoving(true)}><CalendarClock size={13} /> Reschedule</button>
         <button className="btn sm ghost" disabled={busy} onClick={cancel}><CalendarX size={13} /> Cancel</button>
       </div>

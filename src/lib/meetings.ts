@@ -7,7 +7,7 @@
  */
 import { addDays, format, startOfDay } from 'date-fns';
 import { logActivity, type Entity } from './actions';
-import { connectorCall, sendEmail } from './email';
+import { connectorCall, mailboxEmail, sendEmail } from './email';
 import { DEFAULT_TEMPLATES, emailsIn, fillEmail, firstName, normEmail, type EmailTemplate } from './emailmatch';
 import { getSetting, store } from './store';
 import type { Activity } from './types';
@@ -154,7 +154,8 @@ export async function createInvite(entity: Entity, attendee: string, pick: Pick)
   const when = meetingWhen(pick.start, pick.end);
   const activity = logActivity(entity, {
     type: 'meeting', outcome: 'Scheduled', occurredAt: new Date(ev.start || pick.start).toISOString(), endAt: new Date(ev.end || pick.end).toISOString(),
-    eventId: ev.id || '', meetLink: ev.meet || '', emailTo: normEmail(attendee), notes: `${fillEmail(s.title, vars)} · invite sent to ${normEmail(attendee)}`,
+    eventId: ev.id || '', meetLink: ev.meet || '', emailTo: normEmail(attendee), emailFrom: mailboxEmail(),
+    notes: `${fillEmail(s.title, vars)} · invite sent to ${normEmail(attendee)}`,
   });
   return { activity, meetLink: ev.meet || '', when };
 }
@@ -211,6 +212,21 @@ export async function cancelMeeting(activityId: string) {
   const tasks = meetingTasks(a);
   store.upsert('activities', { id: a.id, outcome: 'Cancelled' });
   for (const t of tasks) store.upsert('tasks', { id: t.id, done: true, doneAt: new Date().toISOString(), notes: `${t.notes ? `${t.notes}\n` : ''}Meeting cancelled` });
+}
+
+/**
+ * Your Join link: opens Meet as the Google account that owns the meeting (your email connector's), not whichever
+ * account your browser signed in with first. (The client's invite and email keep the plain link.)
+ */
+export function joinUrl(link: string, account: string): string {
+  if (!link || !account) return link || '';
+  try {
+    const u = new URL(link);
+    u.searchParams.set('authuser', account);
+    return u.toString();
+  } catch {
+    return link;
+  }
 }
 
 export const isLiveMeeting = (a: Activity) => a.type === 'meeting' && !a.deleted && !!a.eventId && a.outcome !== 'Cancelled';
