@@ -117,6 +117,7 @@ function ConnectCard() {
         <ol style={{ margin: 0, paddingLeft: 18, fontSize: '0.9rem', lineHeight: 1.75 }}>
           <li>Sign in to Google as <b>Dylan@tradelink.marketing</b> (the mailbox you want connected).</li>
           <li>Open <b>script.google.com</b> → <b>New project</b>. Name it "TradeLink Email". Delete the starter code and paste the connector (copy button below). Click <b>Save</b>.</li>
+          <li>On the left, <b>Services (+)</b> → <b>Google Calendar API</b> → <b>Add</b> (for meeting invites with Google Meet).</li>
           <li>Pick <b>updateNow</b> in the toolbar's function menu and click <b>▶ Run</b>. Approve the permissions (Advanced → Go to project → Allow).</li>
           <li><b>Deploy → New deployment</b> → type <b>Web app</b>. Execute as <b>Me</b>, Who has access <b>Anyone</b>. Click Deploy and copy the Web app URL.</li>
           <li>Paste the URL below. Do this once on the Mac and once on your phone.</li>

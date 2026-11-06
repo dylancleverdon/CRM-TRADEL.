@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { Breakdown, EngineStatus, PickupHeatmap, Scorecard } from '../components/Insights';
+import { UpcomingMeetings } from '../components/Meetings';
 import { Page } from '../components/Layout';
 import { entityLink, TaskRow } from '../components/Tasks';
 import { Empty, Progress } from '../components/ui';
@@ -163,6 +164,7 @@ export default function Dashboard() {
           </div>
 
           <div className="col" style={{ gap: 'var(--gap)' }}>
+            <UpcomingMeetings />
             <div className="card">
               <div className="card-head"><PhoneCall size={16} /><h3>Up next</h3><span className="faint" style={{ fontSize: '0.8rem' }}>{d.queue.length} in queue</span>
                 <Link to="/call" className="btn sm primary" style={{ marginLeft: 'auto' }}>Call mode</Link>

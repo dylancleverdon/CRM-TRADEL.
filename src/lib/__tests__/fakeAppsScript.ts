@@ -126,8 +126,57 @@ export function loadCodeGs() {
   return env;
 }
 
+/** A stand-in for the Google Calendar API service (Calendar.Events / Calendar.Freebusy). */
+export function fakeCalendar() {
+  const events = new Map<string, any>();
+  const calls: { op: string; args: any[] }[] = [];
+  let n = 0;
+  const cal = {
+    events, calls,
+    busy: [] as { start: string; end: string }[],
+    /** Google sometimes takes a moment to make the Meet link. */
+    meetLater: false,
+    Events: {
+      insert: (ev: any, calId: string, opts: any) => {
+        calls.push({ op: 'insert', args: [ev, calId, opts] });
+        const id = `ev${++n}`;
+        const made = { ...ev, id, htmlLink: `https://calendar.google.com/event?eid=${id}`, status: 'confirmed',
+          ...(cal.meetLater ? {} : { hangoutLink: `https://meet.google.com/abc-${id}` }) };
+        events.set(id, made);
+        return made;
+      },
+      get: (calId: string, id: string) => {
+        calls.push({ op: 'get', args: [calId, id] });
+        const e = events.get(id);
+        if (!e) throw new Error('Not Found');
+        const ready = { ...e, conferenceData: { entryPoints: [{ entryPointType: 'video', uri: `https://meet.google.com/late-${id}` }] } };
+        events.set(id, ready);
+        return ready;
+      },
+      patch: (patch: any, calId: string, id: string, opts: any) => {
+        calls.push({ op: 'patch', args: [patch, calId, id, opts] });
+        const e = events.get(id);
+        if (!e) throw new Error('Not Found');
+        const next = { ...e, ...patch };
+        events.set(id, next);
+        return next;
+      },
+      remove: (calId: string, id: string, opts: any) => {
+        calls.push({ op: 'remove', args: [calId, id, opts] });
+        if (!events.has(id)) throw new Error('API call to calendar.events.delete failed with error: Resource has been deleted');
+        events.delete(id);
+      },
+      list: () => ({ items: [...events.values()] }),
+    },
+    Freebusy: {
+      query: (q: any) => { calls.push({ op: 'freebusy', args: [q] }); return { calendars: { primary: { busy: cal.busy } } }; },
+    },
+  };
+  return cal;
+}
+
 /** The email connector (Email.gs) with a stand-in for the CRM's sheet, which it asks about sync keys. */
-export function loadEmailGs() {
+export function loadEmailGs(opts: { calendar?: ReturnType<typeof fakeCalendar> } = {}) {
   const props = new Map<string, string>();
   const cache = new Map<string, string>();
   const env = {
@@ -151,6 +200,7 @@ export function loadEmailGs() {
     CacheService: { getScriptCache: () => ({ get: (k: string) => cache.get(k) ?? null, put: (k: string, v: string) => { cache.set(k, String(v)); } }) },
     Utilities: {
       getUuid: () => randomUUID(),
+      sleep: () => {},
       DigestAlgorithm: { SHA_256: 'sha256' },
       Charset: { UTF_8: 'utf8' },
       // Like Apps Script: an array of signed bytes.
@@ -168,7 +218,8 @@ export function loadEmailGs() {
         return { getContentText: () => JSON.stringify(r), getResponseCode: () => 200 };
       },
     },
-    Session: { getEffectiveUser: () => ({ getEmail: () => 'Dylan@tradelink.marketing' }) },
+    Session: { getEffectiveUser: () => ({ getEmail: () => 'Dylan@tradelink.marketing' }), getScriptTimeZone: () => 'America/Los_Angeles' },
+    ...(opts.calendar ? { Calendar: opts.calendar } : {}),
     MailApp: { getRemainingDailyQuota: () => 1500 },
     GmailApp: { search: () => [] },
     ContentService: { createTextOutput: (t: string) => ({ setMimeType: () => t }), MimeType: { JSON: 'json' } },

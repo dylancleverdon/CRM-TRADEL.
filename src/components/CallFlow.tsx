@@ -6,12 +6,16 @@ import { convertLead, createOpportunity, entityName, entityPhone, followUpDate, 
 import { CALL_OUTCOMES, DEFAULT_SERVICES } from '../lib/constants';
 import { duration, formatPhone, fromLocalInput, toLocalInput } from '../lib/format';
 import { getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
+import { emailConnected } from '../lib/email';
+import { emailsIn } from '../lib/emailmatch';
 import { isTyping, outcomeForKey, outcomeKey } from '../lib/keys';
+import { bookMeeting, type Pick as MeetingPick } from '../lib/meetings';
 import { isAndroid, isDesktop, placeCall } from '../lib/platform';
 import { saveCalledNumber } from '../lib/phonecontacts';
 import { fillText, getFollowUpText, sendFollowUpText } from '../lib/texts';
 import { serviceList, toggleService } from '../lib/services';
 import { getSetting, store } from '../lib/store';
+import { MeetingPicker } from './MeetingPicker';
 import { Field, Modal, toast } from './ui';
 
 interface PendingCall { entity: Entity; phone: string; startedAt: string; name: string; pick?: string }
@@ -125,6 +129,13 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
   const [service, setService] = useState('');
   const [sendText, setSendText] = useState(() => localStorage.getItem('tl.autoText') === 'on');
   const services = getSetting('services', DEFAULT_SERVICES);
+  // Meeting Booked: a Google Calendar invite with a Meet link (Google emails it), plus your confirmation email.
+  const rec: any = call.entity.type === 'lead' ? store.get('leads', call.entity.id) : call.entity.type === 'contact' ? store.get('contacts', call.entity.id) : null;
+  const canInvite = emailConnected() && (call.entity.type === 'lead' || call.entity.type === 'contact');
+  const [invite, setInvite] = useState(() => localStorage.getItem('tl.autoInvite') !== 'off');
+  const [inviteTo, setInviteTo] = useState(() => emailsIn(rec?.email || '')[0] || '');
+  const [slot, setSlot] = useState<MeetingPick | null>(null);
+  const [confirmMail, setConfirmMail] = useState(() => localStorage.getItem('tl.autoConfirm') !== 'off');
 
   useEffect(() => {
     const start = new Date(call.startedAt).getTime();
@@ -149,8 +160,23 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
     if (andNext) next?.callNext(call.entity);
   };
 
+  const inviting = outcome === 'Meeting Booked' && canInvite && invite;
+  const pickSlot = (p: MeetingPick | null) => {
+    setSlot(p);
+    if (p) { setFollowUp(toLocalInput(p.start.toISOString())); setFollowTitle('Discovery call'); } // the follow-up is the meeting
+  };
+  const book = (e: Entity) => {
+    if (!inviting || !slot) return;
+    toast('📅 Sending the calendar invite…');
+    bookMeeting(e, emailsIn(inviteTo)[0], slot, confirmMail)
+      .then((said) => said.forEach((m) => toast(m)))
+      .catch((err) => toast(`Calendar invite not sent: ${err?.message || err}`));
+  };
+
   const save = (andNext = false) => {
     if (!outcome) { toast('Pick an outcome'); return; }
+    if (inviting && !slot) { toast('Pick the meeting time for the invite, or untick “Send a Google Calendar invite”'); return; }
+    if (inviting && !emailsIn(inviteTo).length) { toast('Add their email so the invite can go out'); return; }
     const dur = durationMin ? Math.round(Number(durationMin) * 60) : elapsed;
     logCall({
       entity: call.entity,
@@ -176,6 +202,7 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
       if (lead) {
         const contact = convertLead(lead);
         const opp = createOpportunity(contact, { service, stage: 'Discovery Booked', nextStep: followTitle || 'Discovery call' });
+        book({ type: 'contact', id: contact.id });
         if (andNext) {
           // Done in the background so you keep dialing; it's under Contacts and Opportunities.
           toast(`🎉 ${contact.company || call.name} is now a contact with an opportunity`);
@@ -187,6 +214,7 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
         return;
       }
     }
+    book(call.entity);
     finish(andNext);
   };
 
@@ -226,6 +254,7 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
 
   return (
     <Modal
+      wide={inviting}
       title={<span className="row"><Phone size={18} /> Call outcome — {call.name}</span>}
       onClose={onCancel}
       footer={<>
@@ -283,6 +312,27 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
             <input type="checkbox" checked={sendText} onChange={(e) => { setSendText(e.target.checked); localStorage.setItem('tl.autoText', e.target.checked ? 'on' : 'off'); }} />
             📱 Text them my follow-up message (from my phone)
           </label>
+        )}
+        {outcome === 'Meeting Booked' && canInvite && (
+          <div className="card" style={{ background: 'var(--accent-soft)' }}>
+            <label className="row" style={{ fontWeight: 600 }}>
+              <input type="checkbox" checked={invite} onChange={(e) => { setInvite(e.target.checked); localStorage.setItem('tl.autoInvite', e.target.checked ? 'on' : 'off'); }} />
+              📅 Send a Google Calendar invite with a Meet link
+            </label>
+            {invite && (
+              <div className="stack" style={{ marginTop: 10, gap: 10 }}>
+                <Field label="Their email"><input type="email" value={inviteTo} onChange={(e) => setInviteTo(e.target.value)} placeholder="owner@business.com" /></Field>
+                <MeetingPicker value={slot} onChange={pickSlot} />
+                <label className="row" style={{ fontSize: '0.88rem' }}>
+                  <input type="checkbox" checked={confirmMail} onChange={(e) => { setConfirmMail(e.target.checked); localStorage.setItem('tl.autoConfirm', e.target.checked ? 'on' : 'off'); }} />
+                  Also send my “Meeting confirmation” email, with the time and Meet link
+                </label>
+              </div>
+            )}
+          </div>
+        )}
+        {outcome === 'Meeting Booked' && !canInvite && (call.entity.type === 'lead' || call.entity.type === 'contact') && (
+          <div className="faint" style={{ fontSize: '0.8rem' }}>Connect your email (Email tab) to send a Google Calendar invite from here.</div>
         )}
         {outcome === 'Meeting Booked' && isLead && (
           <div className="card" style={{ background: 'var(--accent-soft)' }}>

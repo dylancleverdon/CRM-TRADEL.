@@ -5,6 +5,7 @@ import { duration, fromLocalInput, toLocalInput, when } from '../lib/format';
 import { store, useTable } from '../lib/store';
 import type { Activity, ActivityType } from '../lib/types';
 import { EmailReader } from './EmailReader';
+import { MeetingActions, meetingRange } from './Meetings';
 import { Empty, Field, Modal } from './ui';
 
 const ICONS: Record<string, any> = {
@@ -64,9 +65,10 @@ export function Timeline({ entities, title = 'Activity history' }: { entities: E
                   <button className="btn ghost icon sm" title="Edit" onClick={() => setEditing(a)}><Pencil size={13} /></button>
                 </div>
                 <div className="tl-time">
-                  {when(a.occurredAt)}{a.durationSec ? ` · ${duration(a.durationSec)}` : ''}
+                  {a.type === 'meeting' && a.eventId ? meetingRange(a) : when(a.occurredAt)}{a.durationSec ? ` · ${duration(a.durationSec)}` : ''}
                 </div>
                 {a.notes && <div className="tl-notes">{a.notes}</div>}
+                {a.type === 'meeting' && <MeetingActions a={a} />}
               </div>
             </div>
           );

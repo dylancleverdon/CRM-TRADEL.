@@ -4,13 +4,17 @@
  * PASTE THIS ONCE — signed in as the mailbox you want to connect (e.g. Dylan@tradelink.marketing):
  *  1. Go to https://script.google.com -> New project. Name it "TradeLink Email". Delete the starter code,
  *     paste this whole file, click Save.
- *  2. Choose the function "updateNow" in the toolbar and click Run. Approve the permissions
- *     (Gmail + connect to an external service). The log should say "Updated TradeLink code".
- *  3. Deploy -> New deployment -> type Web app. Execute as: Me. Who has access: Anyone. Deploy.
- *  4. Copy the Web app URL and paste it into the CRM: Email tab -> Connect (on each device).
+ *  2. On the left, Services (+) → Google Calendar API → Add (for meeting invites with Google Meet).
+ *  3. Choose the function "updateNow" in the toolbar and click Run. Approve the permissions
+ *     (Gmail, Calendar, connect to an external service). The log should say "Updated TradeLink code".
+ *  4. Deploy -> New deployment -> type Web app. Execute as: Me. Who has access: Anyone. Deploy.
+ *  5. Copy the Web app URL and paste it into the CRM: Email tab -> Connect (on each device).
  *     Keep this URL private: anyone who has it can read and send email from this mailbox.
  *
  * The real connector code (Email.gs) downloads from the latest GitHub release, so updates arrive automatically.
+ *
+ * ALREADY SET UP? To add meeting invites: paste this file over the old one and Save, do step 2, run updateNow and
+ * approve, then Deploy -> Manage deployments -> Edit (pencil) -> Version: New version -> Deploy. The URL stays the same.
  */
 
 var TL_CODE_URL = 'https://github.com/dylancleverdon/CRM-TRADEL./releases/latest/download/Email.gs';
@@ -96,9 +100,12 @@ function updateNow() {
 /**
  * Never called. Google decides which permissions to request by scanning the code pasted here, and the
  * downloaded code is not scanned — so the services the email connector uses are named here:
- * reading/sending Gmail (GmailApp, MailApp), your email address (Session) and downloading updates (UrlFetchApp).
+ * reading/sending Gmail (GmailApp, MailApp), your email address (Session), downloading updates (UrlFetchApp) and
+ * meeting invites with Google Meet (Calendar: the Google Calendar API service, added under Services).
  */
 function tlPermissions_() {
+  Calendar.Events.list('primary', { maxResults: 1 });
+  Calendar.Freebusy.query({ timeMin: new Date().toISOString(), timeMax: new Date().toISOString(), items: [{ id: 'primary' }] });
   GmailApp.search('in:inbox', 0, 1);
   GmailApp.createDraft('', '', '');
   MailApp.getRemainingDailyQuota();

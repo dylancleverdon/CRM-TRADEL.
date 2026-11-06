@@ -309,3 +309,22 @@ td .strong { font-weight: 600; color: var(--text); }
 .sheet-actions > .btn, .sheet-actions > a.btn { width: 100%; justify-content: flex-start; min-height: 48px; font-size: 0.98rem; }
 .sheet-actions .quality-toggle { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
 .sheet-actions .quality-toggle button { min-height: 48px; justify-content: center; }
+
+/* ---------- meeting time picker ---------- */
+.meet-picker { display: flex; flex-direction: column; gap: 10px; }
+.day-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.day-chips .chip { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 10px; min-width: 58px; line-height: 1.15; }
+.day-chips .chip span { font-size: 0.68rem; font-weight: 600; opacity: 0.8; }
+.day-chips .chip b { font-size: 0.82rem; }
+.day-chips .chip.day-off:not(.on) { opacity: 0.55; }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+.slot { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); padding: 8px 4px; border-radius: 9px; font: inherit; font-size: 0.82rem; font-weight: 650; cursor: pointer; }
+.slot:hover:not(:disabled) { border-color: var(--accent); }
+.slot.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.slot:disabled { cursor: not-allowed; }
+.slot.off, .slot.past { background: transparent; color: var(--text-3); border-style: dashed; }
+.slot.busy { background: repeating-linear-gradient(45deg, transparent 0 4px, var(--border) 4px 5px); color: var(--text-3); text-decoration: line-through; }
+.slot-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 0.74rem; color: var(--text-3); }
+.slot-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.slot-legend i.slot { display: inline-block; width: 16px; height: 12px; padding: 0; border-radius: 3px; }
+.meet-picked { font-size: 0.88rem; font-weight: 650; color: var(--text); }

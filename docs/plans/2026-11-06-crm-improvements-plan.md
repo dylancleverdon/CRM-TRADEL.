@@ -12,7 +12,7 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
 | 9 | Lead engine (learns who books meetings) | with 12 | Shipped in v1.0.30 |
 | 12 | Dashboard scorecard + "when owners pick up" heatmap | with 9 | Shipped in v1.0.30 |
 | 15 | Phone: simpler lead page, follow-up reminders (opt-in) | after | Shipped in v1.0.31 |
-| 7 | Google Calendar invites with Google Meet | last; needs a one-time connector update | |
+| 7 | Google Calendar invites with Google Meet | last; needs a one-time connector update | Shipped in v1.0.32 (after Dylan's one-time step) |
 
 ---
 
@@ -123,3 +123,5 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
 4. Deploy a new version; the URL stays the same.
 
 The app shows the exact clicks.
+
+**As built (v1.0.32).** The email connector uses the Google Calendar API (advanced service), because the built-in calendar service can't create Meet links: `calCreate` books with `conferenceDataVersion: 1` and `sendUpdates: 'all'` (Google emails the invite and every change), `calBusy` reads free/busy, `calUpdate` / `calCancel` move or cancel. Until the service is added, the connector says so and Settings → Meetings shows the steps. Meetings are activities of type `meeting` with three new columns (`eventId`, `meetLink`, `endAt`; SETUP_VERSION 11). Rescheduling moves the follow-up set for the meeting's time; cancelling closes it. A failed invite stops the email from going out; a failed email after a sent invite says so and never books twice.

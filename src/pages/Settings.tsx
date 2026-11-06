@@ -1,6 +1,7 @@
-import { BellRing, Check, Copy, Download, Eye, EyeOff, Lock, RefreshCw, Smartphone, Upload } from 'lucide-react';
+import { BellRing, CalendarClock, Check, Copy, Download, Eye, EyeOff, Lock, RefreshCw, Smartphone, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import scriptCode from '../../apps-script/Loader.gs?raw';
+import emailLoaderCode from '../../apps-script/EmailLoader.gs?raw';
 import { CallingSettings } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
 import { Field, InlineInput, toast } from '../components/ui';
@@ -9,6 +10,7 @@ import { DEFAULT_ENGINE, GOAL_LABEL, type EngineGoal } from '../lib/engine';
 import { ago } from '../lib/format';
 import { useEngineSettings } from '../lib/useEngine';
 import { connectorCall, emailConnected } from '../lib/email';
+import { calendarReady, DEFAULT_MEETINGS, meetingSettings, WEEKDAYS, type MeetingSettings } from '../lib/meetings';
 import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
 import { allowExactTiming, nextReminder, reminderAccess, remindersOn, rescheduleAllReminders, scheduledCount, setReminders, type ReminderAccess } from '../lib/reminders';
 import { DEFAULT_FOLLOW_UP_TEXT, TEXT_PLACEHOLDERS } from '../lib/texts';
@@ -35,6 +37,7 @@ export default function Settings() {
         </div>
         <div className="stack">
           <Profile />
+          <MeetingSettingsCard />
           <LeadEngineSettings />
           <ListSetting title="Services you sell (opportunity types)" k="services" fallback={DEFAULT_SERVICES} />
           <ListSetting title="Trades (industries)" k="trades" fallback={DEFAULT_TRADES} />
@@ -143,6 +146,76 @@ function ConnectorLock({ crmLocked }: { crmLocked: boolean }) {
   if (st.locked) return line('bad', 'Email connector locked', "this device doesn't have the key yet");
   if (st.old) return line('warn', 'Email connector', 'updating itself to the version that locks with your key (within 10 minutes)');
   return line('warn', 'Email connector not locked yet', crmLocked ? 'it locks itself within 10 minutes' : 'it locks together with your CRM');
+}
+
+/** Google Calendar invites with Meet: your weekly hours, length, invite text, and the one-time connector step. */
+function MeetingSettingsCard() {
+  const s = meetingSettings(useSetting<Partial<MeetingSettings>>('meetings', {}));
+  const set = (patch: Partial<MeetingSettings>) => setSetting('meetings', { ...s, ...patch });
+  const setDay = (i: number, patch: Partial<MeetingSettings['week'][number]>) => set({ week: s.week.map((d, j) => (j === i ? { ...d, ...patch } : d)) });
+  const [ready, setReady] = useState<boolean | null>(null);
+  const [err, setErr] = useState('');
+  const check = () => {
+    if (!emailConnected()) return;
+    setErr('');
+    calendarReady().then(setReady).catch((e) => setErr(e?.message || String(e)));
+  };
+  useEffect(check, []);
+  const order = [1, 2, 3, 4, 5, 6, 0]; // Monday first
+  return (
+    <div className="card">
+      <div className="card-head"><CalendarClock size={15} /><h3>Meetings (Google Calendar)</h3>
+        {ready === true && <span className="pill good" style={{ marginLeft: 'auto' }}>Calendar connected</span>}
+        {ready === false && <span className="pill warn" style={{ marginLeft: 'auto' }}>Calendar not added yet</span>}
+      </div>
+      <div className="faint" style={{ fontSize: '0.82rem', marginBottom: 10 }}>
+        Meeting Booked and Add meeting invite send a Google Calendar invite with a Google Meet link from your email connector's account.
+        The time picker greys out times outside these hours and times already busy on your calendar.
+      </div>
+      {!emailConnected() && <div className="pill warn" style={{ whiteSpace: 'normal', marginBottom: 10 }}>Connect your email first (Email tab): invites go out through it.</div>}
+      {err && <div className="pill bad" style={{ whiteSpace: 'normal', marginBottom: 10 }}>{err}</div>}
+      {ready === false && (
+        <div className="card" style={{ background: 'var(--warn-soft)', marginBottom: 12 }}>
+          <b style={{ fontSize: '0.88rem' }}>One-time step (about 2 minutes), signed in to Google as your email connector's account:</b>
+          <ol style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: '0.86rem', lineHeight: 1.7 }}>
+            <li>Open <b>script.google.com</b> → your <b>TradeLink Email</b> project. Replace all the code with the new connector (Copy below) and click <b>Save</b>.</li>
+            <li>On the left, <b>Services (+)</b> → <b>Google Calendar API</b> → <b>Add</b>.</li>
+            <li>Pick <b>updateNow</b> in the toolbar → <b>▶ Run</b> → approve the new Calendar permission.</li>
+            <li><b>Deploy → Manage deployments</b> → ✏️ <b>Edit</b> → Version: <b>New version</b> → <b>Deploy</b>. The URL stays the same.</li>
+          </ol>
+          <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+            <button className="btn sm" onClick={() => { navigator.clipboard.writeText(emailLoaderCode); toast('Connector copied'); }}><Copy size={14} /> Copy email connector code</button>
+            <button className="btn sm" onClick={() => openExternal('https://script.google.com/home')}>Open script.google.com</button>
+            <button className="btn sm ghost" onClick={check}><RefreshCw size={13} /> Check again</button>
+          </div>
+        </div>
+      )}
+      <div style={{ fontSize: '0.84rem', fontWeight: 650, marginBottom: 6 }}>Your hours</div>
+      <div className="stack" style={{ gap: 6, marginBottom: 12 }}>
+        {order.map((i) => (
+          <div key={i} className="row wrap" style={{ gap: 8 }}>
+            <label className="row" style={{ width: 120, gap: 6, fontSize: '0.88rem' }}>
+              <input type="checkbox" checked={s.week[i].on} onChange={(e) => setDay(i, { on: e.target.checked })} /> {WEEKDAYS[i]}
+            </label>
+            {s.week[i].on ? <>
+              <input type="time" step={1800} style={{ width: 'auto' }} value={s.week[i].from} onChange={(e) => setDay(i, { from: e.target.value || '09:00' })} />
+              <span className="faint">to</span>
+              <input type="time" step={1800} style={{ width: 'auto' }} value={s.week[i].to} onChange={(e) => setDay(i, { to: e.target.value || '17:00' })} />
+            </> : <span className="faint" style={{ fontSize: '0.82rem' }}>Not available</span>}
+          </div>
+        ))}
+      </div>
+      <div className="form-grid">
+        <Field label="Meeting length">
+          <select value={s.lengthMin} onChange={(e) => set({ lengthMin: Number(e.target.value) })}>
+            {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} minutes{m === DEFAULT_MEETINGS.lengthMin ? ' (default)' : ''}</option>)}
+          </select>
+        </Field>
+        <Field label="Invite title ({company} {firstName} {myName})"><InlineInput value={s.title} onSave={(v) => set({ title: v || DEFAULT_MEETINGS.title })} /></Field>
+        <Field label="Invite description" full><InlineInput value={s.description} onSave={(v) => set({ description: v || DEFAULT_MEETINGS.description })} /></Field>
+      </div>
+    </div>
+  );
 }
 
 /** Follow-up reminders on this phone: off by default. */

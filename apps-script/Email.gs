@@ -9,6 +9,8 @@
  *   send    - send a new email or reply in a thread
  *   get     - one message with its full text (for reading it in the CRM)
  *   markRead / readState - keep "read" in step between Gmail and the CRM
+ *   calBusy / calCreate / calUpdate / calCancel - Google Calendar invites with a Google Meet link (needs the
+ *             Google Calendar API service added to this project; Google emails the invite and any change)
  *   textRequest / contactRequest / keyRequest / textPoll - the Mac asks your phone to send a follow-up text,
  *             save people to the phone's contacts, or take the sheet's sync key. This goes through this
  *             connector (its URL is private to your devices) rather than the sheet's public sync URL.
@@ -48,7 +50,8 @@ function tlEmailHandle_(b) {
     var auth = tlAuth_(b);
     if (b.action === 'ping') {
       if (!auth.ok) return { ok: true, locked: true, keyed: false, version: TL_EMAIL_VERSION };
-      return { ok: true, email: tlMe_(), version: TL_EMAIL_VERSION, quota: MailApp.getRemainingDailyQuota(), locked: auth.locked, keyed: auth.keyed };
+      return { ok: true, email: tlMe_(), version: TL_EMAIL_VERSION, quota: MailApp.getRemainingDailyQuota(), locked: auth.locked, keyed: auth.keyed,
+        calendar: tlHasCalendar_() };
     }
     if (!auth.ok) {
       // A phone without the key can still receive it from your Mac ("Send key to my phone"), and nothing else.
@@ -65,6 +68,10 @@ function tlEmailHandle_(b) {
     if (b.action === 'contactRequest') return tlContactRequest_(b);
     if (b.action === 'keyRequest') return tlKeyRequest_(b);
     if (b.action === 'textPoll') return tlTextPoll_(b);
+    if (b.action === 'calBusy') return tlCalBusy_(b);
+    if (b.action === 'calCreate') return tlCalCreate_(b);
+    if (b.action === 'calUpdate') return tlCalUpdate_(b);
+    if (b.action === 'calCancel') return tlCalCancel_(b);
     return { ok: false, error: 'Unknown action' };
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
@@ -136,6 +143,88 @@ function tlKeyOnlyPoll_() {
   try { kreq = JSON.parse(props.getProperty('tl_keyRequest') || 'null'); } catch (e) { kreq = null; }
   if (kreq && now - kreq.at > 120000) { props.deleteProperty('tl_keyRequest'); kreq = null; }
   return { ok: true, locked: true, serverTime: now, keyReq: kreq };
+}
+
+// ---------------------------------------------------------------- Google Calendar (invites with a Meet link)
+
+var TL_CAL_SETUP = "Google Calendar isn't added to your email connector yet. In the CRM, Settings → Meetings shows the steps (about 2 minutes).";
+
+/** The Google Calendar API service (Apps Script → Services → Google Calendar API) is on. */
+function tlHasCalendar_() {
+  return typeof Calendar !== 'undefined' && !!Calendar && !!Calendar.Events;
+}
+
+function tlTime_(v) {
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function tlEventOut_(ev) {
+  var meet = ev.hangoutLink || '';
+  if (!meet && ev.conferenceData && ev.conferenceData.entryPoints) {
+    ev.conferenceData.entryPoints.forEach(function (p) { if (!meet && p.entryPointType === 'video') meet = p.uri; });
+  }
+  return {
+    id: ev.id, link: ev.htmlLink || '', meet: meet, status: ev.status || '',
+    start: (ev.start && (ev.start.dateTime || ev.start.date)) || '', end: (ev.end && (ev.end.dateTime || ev.end.date)) || '',
+  };
+}
+
+/** Busy times on your main calendar between `from` and `to`. */
+function tlCalBusy_(b) {
+  if (!tlHasCalendar_()) return { ok: false, code: 'nocalendar', error: TL_CAL_SETUP };
+  var from = tlTime_(b.from), to = tlTime_(b.to);
+  if (!from || !to || to <= from) return { ok: false, error: 'Bad time range' };
+  var r = Calendar.Freebusy.query({ timeMin: from.toISOString(), timeMax: to.toISOString(), items: [{ id: 'primary' }] });
+  var cal = (r && r.calendars && r.calendars.primary) || {};
+  return { ok: true, busy: (cal.busy || []).map(function (x) { return { start: x.start, end: x.end }; }) };
+}
+
+/** Books the meeting with a Google Meet link; Google emails the invite to the client. */
+function tlCalCreate_(b) {
+  if (!tlHasCalendar_()) return { ok: false, code: 'nocalendar', error: TL_CAL_SETUP };
+  var start = tlTime_(b.start), end = tlTime_(b.end);
+  if (!start || !end || end <= start) return { ok: false, error: 'Pick a meeting time' };
+  var to = tlAddr_(b.attendee);
+  if (to.indexOf('@') < 1) return { ok: false, error: 'Their email address is missing' };
+  var tz = String(b.timeZone || Session.getScriptTimeZone() || 'UTC');
+  var guest = { email: to };
+  if (b.name) guest.displayName = String(b.name).slice(0, 100);
+  var ev = Calendar.Events.insert({
+    summary: String(b.title || 'Meeting').slice(0, 200),
+    description: String(b.description || '').slice(0, 8000),
+    start: { dateTime: start.toISOString(), timeZone: tz },
+    end: { dateTime: end.toISOString(), timeZone: tz },
+    attendees: [guest],
+    conferenceData: { createRequest: { requestId: Utilities.getUuid(), conferenceSolutionKey: { type: 'hangoutsMeet' } } },
+    reminders: { useDefault: true },
+  }, 'primary', { conferenceDataVersion: 1, sendUpdates: 'all' });
+  // The Meet link is usually there at once; if Google is still making it, ask again.
+  for (var i = 0; i < 3 && !tlEventOut_(ev).meet; i++) { Utilities.sleep(1000); ev = Calendar.Events.get('primary', ev.id); }
+  return { ok: true, event: tlEventOut_(ev) };
+}
+
+/** Moves the meeting; Google emails the client the new time. */
+function tlCalUpdate_(b) {
+  if (!tlHasCalendar_()) return { ok: false, code: 'nocalendar', error: TL_CAL_SETUP };
+  var start = tlTime_(b.start), end = tlTime_(b.end);
+  if (!b.id || !start || !end || end <= start) return { ok: false, error: 'Pick the new time' };
+  var tz = String(b.timeZone || Session.getScriptTimeZone() || 'UTC');
+  var ev = Calendar.Events.patch({ start: { dateTime: start.toISOString(), timeZone: tz }, end: { dateTime: end.toISOString(), timeZone: tz } },
+    'primary', String(b.id), { sendUpdates: 'all' });
+  return { ok: true, event: tlEventOut_(ev) };
+}
+
+/** Cancels the meeting; Google tells the client. Already gone counts as done. */
+function tlCalCancel_(b) {
+  if (!tlHasCalendar_()) return { ok: false, code: 'nocalendar', error: TL_CAL_SETUP };
+  if (!b.id) return { ok: false, error: 'Which meeting?' };
+  try {
+    Calendar.Events.remove('primary', String(b.id), { sendUpdates: 'all' });
+  } catch (e) {
+    if (!/not found|deleted|410|404/i.test(String(e && e.message || e))) throw e;
+  }
+  return { ok: true };
 }
 
 function tlMe_() {

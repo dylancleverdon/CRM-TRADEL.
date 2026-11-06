@@ -125,6 +125,10 @@ export interface Activity extends BaseRecord {
   pick?: string;
   /** Calls: 'custom' if the business had its own script, else 'default'. */
   scriptKind?: string;
+  /** Meetings (Google Calendar): the event, its Google Meet link and when it ends (occurredAt = when it starts). */
+  eventId?: string;
+  meetLink?: string;
+  endAt?: string;
 }
 
 export interface Task extends BaseRecord {

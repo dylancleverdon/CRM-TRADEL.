@@ -1,11 +1,13 @@
-import { Save, Send } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { CalendarPlus, Save, Send, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { emailConnected, sendEmail } from '../lib/email';
 import { DEFAULT_TEMPLATES, emailsIn, fillEmail, firstName, unfillEmail, type EmailTemplate } from '../lib/emailmatch';
+import { createInvite, meetingWhen, withMeeting, withMeetingPlaceholders, type Booked, type Pick as MeetingPick } from '../lib/meetings';
 import { openExternal } from '../lib/platform';
 import { getSetting, setSetting, store, uid, useSetting } from '../lib/store';
 import type { EntityType } from '../lib/types';
+import { MeetingPicker } from './MeetingPicker';
 import { Field, Modal, toast } from './ui';
 
 export interface ComposeTarget { entity?: { type: EntityType; id: string }; to?: string; subject?: string; threadId?: string }
@@ -43,6 +45,22 @@ export function ComposeForm({ target, onDone, onCancel }: { target: ComposeTarge
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState<'new' | 'update' | null>(null);
   const connected = emailConnected();
+  // Add meeting invite: a Google Calendar invite with a Meet link goes out when you send, and the time and link
+  // are filled into the message.
+  const canInvite = connected && (target.entity?.type === 'lead' || target.entity?.type === 'contact');
+  const [meeting, setMeeting] = useState<MeetingPick | null>(null);
+  const [picking, setPicking] = useState(false);
+  const booked = useRef<Booked | null>(null); // the invite already went out (don't book twice if the email fails)
+  const pickMeeting = (p: MeetingPick | null) => {
+    setMeeting(p);
+    booked.current = null;
+    if (p) setBody((b) => withMeetingPlaceholders(b));
+  };
+  const removeMeeting = () => {
+    setMeeting(null);
+    setPicking(false);
+    setBody((b) => b.replace(/\n*\{meetingTime\}\nGoogle Meet: \{meetLink\}\n*/, '\n\n').replace(/^\n+/, ''));
+  };
   const current = templates.find((t) => t.id === tpl);
   const changed = !!current && (body !== fillEmail(current.body, vars) || (!reply && subject !== fillEmail(current.subject, vars)));
 
@@ -63,11 +81,24 @@ export function ComposeForm({ target, onDone, onCancel }: { target: ComposeTarge
     }
     setSending(true);
     try {
-      await sendEmail({ entity: target.entity, to, subject, body, threadId: target.threadId });
-      toast('Email sent');
+      let text = body;
+      if (meeting && target.entity) {
+        try {
+          if (!booked.current) booked.current = await createInvite(target.entity, emailsIn(to)[0], meeting);
+        } catch (e: any) {
+          toast(`Invite not sent, so the email wasn't either: ${e?.message || e}`);
+          return;
+        }
+        text = withMeeting(body, booked.current.when, booked.current.meetLink);
+      }
+      try {
+        await sendEmail({ entity: target.entity, to, subject, body: text, threadId: target.threadId });
+      } catch (e: any) {
+        toast(booked.current ? `The invite went out, but the email didn't: ${e?.message || e}. Send again to retry the email.` : `Send failed: ${e?.message || e}`);
+        return;
+      }
+      toast(meeting ? '📅 Invite and email sent' : 'Email sent');
       onDone();
-    } catch (e: any) {
-      toast(`Send failed: ${e?.message || e}`);
     } finally {
       setSending(false);
     }
@@ -85,13 +116,31 @@ export function ComposeForm({ target, onDone, onCancel }: { target: ComposeTarge
         {!reply && <Field label="Subject" full><input value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>}
         <Field label="Message" full><textarea rows={12} value={body} onChange={(e) => setBody(e.target.value)} autoFocus={!!to} /></Field>
       </div>
+      {canInvite && picking && (
+        <div className="card" style={{ background: 'var(--accent-soft)' }}>
+          <div className="row" style={{ marginBottom: 8 }}>
+            <b style={{ fontSize: '0.9rem' }}>📅 Meeting invite</b>
+            <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={removeMeeting}><X size={14} /> Remove</button>
+          </div>
+          <MeetingPicker value={meeting} onChange={pickMeeting} />
+          {meeting && (
+            <div className="faint" style={{ fontSize: '0.78rem', marginTop: 8 }}>
+              When you send: Google emails {emailsIn(to)[0] || 'them'} the invite for {meetingWhen(meeting.start, meeting.end)} with a Google Meet link,
+              and {'{meetingTime}'} and {'{meetLink}'} in your message are filled in.
+            </div>
+          )}
+        </div>
+      )}
       <div className="row wrap" style={{ gap: 6 }}>
+        {canInvite && !picking && <button className="btn ghost sm" onClick={() => setPicking(true)}><CalendarPlus size={14} /> Add meeting invite</button>}
         <button className="btn ghost sm" disabled={!body.trim()} onClick={() => setSaving('new')}><Save size={14} /> Save as new template</button>
         {current && changed && <button className="btn ghost sm" onClick={() => setSaving('update')}><Save size={14} /> Update “{current.name}”</button>}
         <span className="spacer" />
         {!connected && <span className="faint" style={{ fontSize: '0.8rem' }}>Email not connected: opens your mail app. <Link to="/email" onClick={onCancel}>Connect</Link></span>}
         <button className="btn ghost" onClick={onCancel}>Cancel</button>
-        <button className="btn primary" disabled={sending} onClick={send}><Send size={15} /> {sending ? 'Sending…' : 'Send'}</button>
+        <button className="btn primary" disabled={sending || (picking && !meeting)} onClick={send} title={picking && !meeting ? 'Pick the meeting time, or remove the invite' : undefined}>
+          <Send size={15} /> {sending ? 'Sending…' : meeting ? 'Send invite & email' : 'Send'}
+        </button>
       </div>
       <div className="faint" style={{ fontSize: '0.75rem' }}>Sent from your connected mailbox and logged to this {target.entity?.type || 'record'}'s history. Your signature from Email → Settings is added automatically.</div>
       {saving && (
