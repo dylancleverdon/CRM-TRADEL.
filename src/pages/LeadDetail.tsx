@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { InfoFields, QuickLinks } from '../components/Detail';
+import { MobileActions } from '../components/MobileActions';
 import { NotesFeed } from '../components/Notes';
 import { Page } from '../components/Layout';
 import { PresenceCard } from '../components/Presence';
@@ -54,20 +55,36 @@ export default function LeadDetail() {
         <span>· last contact {ago(lead.lastContactedAt)}</span>
       </span>}
       actions={<>
-        <div className="quality-toggle">
-          <button className={`good ${lead.quality === 'good' ? 'on' : ''}`} onClick={() => setLeadQuality(lead, lead.quality === 'good' ? '' : 'good')}><ThumbsUp size={15} /> Good</button>
-          <button className={`bad ${lead.quality === 'bad' ? 'on' : ''}`} onClick={() => (lead.quality === 'bad' ? setLeadQuality(lead, '') : setBadOpen(true))}><ThumbsDown size={15} /> Bad</button>
+        <div className="row wrap hide-mobile" style={{ gap: 8, justifyContent: 'flex-end' }}>
+          <div className="quality-toggle">
+            <button className={`good ${lead.quality === 'good' ? 'on' : ''}`} onClick={() => setLeadQuality(lead, lead.quality === 'good' ? '' : 'good')}><ThumbsUp size={15} /> Good</button>
+            <button className={`bad ${lead.quality === 'bad' ? 'on' : ''}`} onClick={() => (lead.quality === 'bad' ? setLeadQuality(lead, '') : setBadOpen(true))}><ThumbsDown size={15} /> Bad</button>
+          </div>
+          {lead.convertedContactId ? (
+            <Link className="btn" to={`/contacts/${lead.convertedContactId}`}><UserCheck size={15} /> View contact</Link>
+          ) : (
+            <button className="btn" onClick={convert}><UserCheck size={15} /> Convert to contact</button>
+          )}
+          <QueueButton entity={entity} queued={!!lead.queuedAt} disabled={!lead.phone && !lead.queuedAt} />
+          <PhoneContactButton entity={entity} rec={lead} />
+          <button className="btn" disabled={!lead.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
+          <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
+          <button className="btn call" disabled={!lead.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
         </div>
-        {lead.convertedContactId ? (
-          <Link className="btn" to={`/contacts/${lead.convertedContactId}`}><UserCheck size={15} /> View contact</Link>
-        ) : (
-          <button className="btn" onClick={convert}><UserCheck size={15} /> Convert to contact</button>
-        )}
-        <QueueButton entity={entity} queued={!!lead.queuedAt} disabled={!lead.phone && !lead.queuedAt} />
-        <PhoneContactButton entity={entity} rec={lead} />
-        <button className="btn" disabled={!lead.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
-        <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
-        <button className="btn call" disabled={!lead.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
+        <MobileActions phone={lead.phone} title={lead.company} onCall={() => startCall(entity)} onText={() => setTexting(true)} more={(close) => <>
+          <div className="quality-toggle">
+            <button className={`good ${lead.quality === 'good' ? 'on' : ''}`} onClick={() => setLeadQuality(lead, lead.quality === 'good' ? '' : 'good')}><ThumbsUp size={15} /> Good lead</button>
+            <button className={`bad ${lead.quality === 'bad' ? 'on' : ''}`} onClick={() => { if (lead.quality === 'bad') setLeadQuality(lead, ''); else { close(); setBadOpen(true); } }}><ThumbsDown size={15} /> Bad lead</button>
+          </div>
+          {lead.convertedContactId ? (
+            <Link className="btn" to={`/contacts/${lead.convertedContactId}`} onClick={close}><UserCheck size={15} /> View contact</Link>
+          ) : (
+            <button className="btn" onClick={() => { close(); convert(); }}><UserCheck size={15} /> Convert to contact</button>
+          )}
+          <QueueButton entity={entity} queued={!!lead.queuedAt} disabled={!lead.phone && !lead.queuedAt} />
+          <PhoneContactButton entity={entity} rec={lead} />
+          <button className="btn" onClick={() => { close(); logManual(entity); }}><StickyNote size={15} /> Log a call without dialing</button>
+        </>} />
       </>}
     >
       <div className="split">

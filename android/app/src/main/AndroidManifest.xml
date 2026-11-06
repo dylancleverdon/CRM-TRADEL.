@@ -44,6 +44,8 @@
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <!-- Follow-up texts from your own number (also when the Mac asks the phone to send one) -->
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <!-- Follow-up reminders on time (the user allows it in Settings → Follow-up reminders). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 

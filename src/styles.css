@@ -300,3 +300,12 @@ td .strong { font-weight: 600; color: var(--text); }
 .heat-tip span { color: var(--text-2); }
 .heat-legend { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 0.72rem; color: var(--text-3); margin-top: 8px; }
 .heat-legend .heat-c { width: 16px; height: 12px; }
+
+/* ---------- phone: Call and Text first, the rest under More ---------- */
+.mobile-actions { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; width: 100%; }
+.mobile-actions .btn { justify-content: center; min-height: 52px; }
+@media (max-width: 820px) { .page-head .actions:has(.mobile-actions) { width: 100%; margin-left: 0; } }
+.sheet-actions { display: grid; gap: 8px; }
+.sheet-actions > .btn, .sheet-actions > a.btn { width: 100%; justify-content: flex-start; min-height: 48px; font-size: 0.98rem; }
+.sheet-actions .quality-toggle { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+.sheet-actions .quality-toggle button { min-height: 48px; justify-content: center; }

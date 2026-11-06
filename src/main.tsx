@@ -6,6 +6,7 @@ import { startAutoSync } from './lib/sync';
 import { startDeskPhone } from './lib/deskphone';
 import { startLeadSources } from './lib/leadsources';
 import { startEmail } from './lib/email';
+import { startReminders } from './lib/reminders';
 import { applyTheme } from './lib/theme';
 import { startUpdateChecks } from './lib/updater';
 import './styles.css';
@@ -23,4 +24,5 @@ store.load().then(() => {
   startDeskPhone();
   startLeadSources();
   startEmail();
+  startReminders();
 });

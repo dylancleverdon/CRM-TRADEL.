@@ -1,4 +1,4 @@
-import { Check, Copy, Download, Eye, EyeOff, Lock, RefreshCw, Smartphone, Upload } from 'lucide-react';
+import { BellRing, Check, Copy, Download, Eye, EyeOff, Lock, RefreshCw, Smartphone, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import scriptCode from '../../apps-script/Loader.gs?raw';
 import { CallingSettings } from '../components/DeskPhone';
@@ -10,6 +10,7 @@ import { ago } from '../lib/format';
 import { useEngineSettings } from '../lib/useEngine';
 import { connectorCall, emailConnected } from '../lib/email';
 import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
+import { allowExactTiming, nextReminder, reminderAccess, remindersOn, rescheduleAllReminders, scheduledCount, setReminders, type ReminderAccess } from '../lib/reminders';
 import { DEFAULT_FOLLOW_UP_TEXT, TEXT_PLACEHOLDERS } from '../lib/texts';
 import { isAndroid, isDesktop, Native, openExternal, platformName } from '../lib/platform';
 import { setSetting, store, useSetting } from '../lib/store';
@@ -28,6 +29,7 @@ export default function Settings() {
           <CallingSettings />
           <FollowUpText />
           {isAndroid() && <PhoneContacts />}
+          {isAndroid() && <ReminderSettings />}
           <Appearance />
           <Updates />
         </div>
@@ -141,6 +143,65 @@ function ConnectorLock({ crmLocked }: { crmLocked: boolean }) {
   if (st.locked) return line('bad', 'Email connector locked', "this device doesn't have the key yet");
   if (st.old) return line('warn', 'Email connector', 'updating itself to the version that locks with your key (within 10 minutes)');
   return line('warn', 'Email connector not locked yet', crmLocked ? 'it locks itself within 10 minutes' : 'it locks together with your CRM');
+}
+
+/** Follow-up reminders on this phone: off by default. */
+function ReminderSettings() {
+  const [on, setOn] = useState(remindersOn());
+  const [access, setAccess] = useState<ReminderAccess | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!on) return;
+    let wasExact: string | undefined;
+    const check = () => reminderAccess().then((a) => {
+      // Just allowed exact timing in Android settings: put the reminders already scheduled on time too.
+      if (wasExact === 'denied' && a.exact === 'granted') rescheduleAllReminders().finally(() => tick((n) => n + 1));
+      wasExact = a.exact;
+      setAccess(a);
+    }).catch(() => {});
+    check();
+    const onVis = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [on]);
+  const toggle = async (v: boolean) => {
+    setBusy(true);
+    try {
+      setAccess(await setReminders(v));
+      setOn(v);
+      toast(v ? '🔔 Reminders on: this phone will notify you when a follow-up comes due' : 'Reminders off on this phone');
+    } catch (e: any) { toast(e?.message || String(e)); } finally { setBusy(false); }
+  };
+  const next = on ? nextReminder() : null;
+  const count = on ? scheduledCount() : 0;
+  return (
+    <div className="card">
+      <div className="card-head"><BellRing size={15} /><h3>Follow-up reminders</h3></div>
+      <label className="row" style={{ fontWeight: 600, fontSize: '0.92rem' }}>
+        <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(e.target.checked)} />
+        Notify me on this phone when a follow-up comes due
+      </label>
+      <div className="faint" style={{ fontSize: '0.8rem', marginTop: 6 }}>
+        At the follow-up's time, even with the app closed. Tap it to open the lead. Follow-ups you add on the Mac reach this phone the next time it syncs (when you open the app).
+      </div>
+      {on && access && (
+        <div className="stack" style={{ marginTop: 10, fontSize: '0.84rem', gap: 6 }}>
+          {access.notifications !== 'granted' && <div className="pill bad" style={{ whiteSpace: 'normal' }}>Notifications are off for TradeLink: Android Settings → Apps → TradeLink CRM → Notifications.</div>}
+          {access.exact === 'denied' ? (
+            <div className="row wrap" style={{ gap: 8 }}>
+              <span className="pill warn">May be a few minutes late</span>
+              <button className="btn sm" onClick={() => allowExactTiming().catch(() => {})}>Allow on-time reminders</button>
+            </div>
+          ) : <span className="pill good" style={{ alignSelf: 'flex-start' }}>On time</span>}
+          <div className="faint">
+            {count ? `${count} reminder${count === 1 ? '' : 's'} scheduled` : 'No upcoming follow-ups to remind you about'}
+            {next ? ` · next ${new Date(next.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}: ${next.title.replace(/^Follow-up: /, '')}` : ''}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function LeadEngineSettings() {

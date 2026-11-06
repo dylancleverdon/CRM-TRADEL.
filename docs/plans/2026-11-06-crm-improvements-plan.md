@@ -11,7 +11,7 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
 | 6 | Save and call next + keyboard shortcuts | next | Shipped in v1.0.28 |
 | 9 | Lead engine (learns who books meetings) | with 12 | Shipped in v1.0.30 |
 | 12 | Dashboard scorecard + "when owners pick up" heatmap | with 9 | Shipped in v1.0.30 |
-| 15 | Phone: simpler lead page, follow-up reminders (opt-in) | after | |
+| 15 | Phone: simpler lead page, follow-up reminders (opt-in) | after | Shipped in v1.0.31 |
 | 7 | Google Calendar invites with Google Meet | last; needs a one-time connector update | |
 
 ---
@@ -99,6 +99,8 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
   - Scheduled on the phone, so it works with the app closed. Tapping it opens the lead.
   - Follow-ups created on the Mac reach the phone the next time it syncs.
 - No phone email notifications: Gmail covers that.
+
+**As built (v1.0.31).** Reminders use Capacitor Local Notifications: up to 60 upcoming follow-ups (next 30 days) are scheduled on the phone and kept in step as follow-ups change, with a "Follow-up reminders" channel and the TradeLink phone icon. Android 12+ needs "Alarms & reminders" allowed for exact timing (the app asks in Settings; without it a reminder can be a few minutes late). They survive a reboot.
 
 ## 7. Google Calendar invites (Google Meet)
 

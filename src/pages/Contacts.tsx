@@ -1,6 +1,7 @@
 import { ArrowLeft, Briefcase, MessageSquare, Phone, Plus, Search, StickyNote, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { MobileActions } from '../components/MobileActions';
 import { useCall } from '../components/CallFlow';
 import { InfoFields, QuickLinks } from '../components/Detail';
 import { NotesFeed } from '../components/Notes';
@@ -152,12 +153,20 @@ export function ContactDetail() {
       title={<span className="row" style={{ gap: 10 }}><button className="btn ghost icon" onClick={() => navigate(-1)}><ArrowLeft size={18} /></button>{c.company}</span>}
       sub={<span className="row wrap" style={{ gap: 8 }}><StatusPill status={c.status} /><span>{c.contactName}</span>{c.phone && <span>· {formatPhone(c.phone)}</span>}<span>· last contact {ago(c.lastContactedAt)}</span></span>}
       actions={<>
-        <button className="btn" onClick={() => setNewOpp(true)}><Briefcase size={15} /> New opportunity</button>
-        <QueueButton entity={entity} queued={!!c.queuedAt} disabled={!c.phone && !c.queuedAt} />
-        <PhoneContactButton entity={entity} rec={c} />
-        <button className="btn" disabled={!c.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
-        <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
-        <button className="btn call" disabled={!c.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
+        <div className="row wrap hide-mobile" style={{ gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={() => setNewOpp(true)}><Briefcase size={15} /> New opportunity</button>
+          <QueueButton entity={entity} queued={!!c.queuedAt} disabled={!c.phone && !c.queuedAt} />
+          <PhoneContactButton entity={entity} rec={c} />
+          <button className="btn" disabled={!c.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
+          <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
+          <button className="btn call" disabled={!c.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>
+        </div>
+        <MobileActions phone={c.phone} title={c.company} onCall={() => startCall(entity)} onText={() => setTexting(true)} more={(close) => <>
+          <button className="btn" onClick={() => { close(); setNewOpp(true); }}><Briefcase size={15} /> New opportunity</button>
+          <QueueButton entity={entity} queued={!!c.queuedAt} disabled={!c.phone && !c.queuedAt} />
+          <PhoneContactButton entity={entity} rec={c} />
+          <button className="btn" onClick={() => { close(); logManual(entity); }}><StickyNote size={15} /> Log a call without dialing</button>
+        </>} />
       </>}
     >
       <div className="split">
