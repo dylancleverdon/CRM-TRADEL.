@@ -34,6 +34,17 @@ That's the last time you touch Apps Script. The loader downloads the real sync c
 
 The apps already have the TradeLink sheet URL built in. The script creates these tabs: `leads`, `contacts`, `opportunities`, `activities`, `tasks`, `suggestions`, `settings`. You can edit rows directly in the sheet and the changes sync back to the apps. In the `suggestions` tab, use the **decision** dropdown.
 
+## Security and backups
+The sync link is in this public code, so your sheet also has a private **sync key**. Until you lock the CRM, anyone who finds the link could read or change it. Locking takes 2 minutes:
+1. Open the sheet and go to the **🔒 Sync key** tab. Your sheet isn't shared, so only you can see it.
+2. On the Mac, go to **Settings → Security & backups**, paste the key and click **Save key**.
+3. Click **Send key to my phone**. The phone needs Desk phone mode on and email connected. You can also paste the key on the phone yourself.
+4. Click **Lock my CRM**. From then on the sheet refuses every request without the key.
+
+If you lose the key, it's always in that tab. To unlock, open Apps Script → Project Settings → Script properties and delete `tl_locked`.
+
+**Backups:** the sheet keeps two copies in your Drive, *CRM Tradelink Backup – A* and *– B*. They're refreshed on alternating days at the first sync of the day, so you always have the last two days. Settings shows when the last backup ran, with links to both copies.
+
 ## Lead Finder (public records)
 The **Lead Finder** page downloads every licensed home-service business in Washington from public open data:
 - **WA L&I contractor registry:** about 76k active contractors, with phone numbers and owner names.

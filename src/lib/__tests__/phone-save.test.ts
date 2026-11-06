@@ -14,10 +14,14 @@ vi.mock('../email', () => ({
   emailConnected: () => env.connected,
   connectorCall: vi.fn(async (body: any) => { connector.calls.push(body); return connector.replies.shift() ?? { ok: true }; }),
 }));
-const mem = new Map<string, string>();
-vi.stubGlobal('localStorage', {
-  getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); },
-  removeItem: (k: string) => { mem.delete(k); }, clear: () => mem.clear(),
+const mem = vi.hoisted(() => {
+  const m = new Map<string, string>();
+  // Installed before any module loads (sync.ts reads localStorage at load time).
+  (globalThis as any).localStorage = {
+    getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, String(v)); },
+    removeItem: (k: string) => { m.delete(k); }, clear: () => m.clear(),
+  };
+  return m;
 });
 
 import { addToPhoneContacts, DEFAULT_CONTACT_ACCOUNT } from '../phonecontacts';
@@ -82,6 +86,15 @@ describe('Save to phone (no call needed)', () => {
     env.connected = false;
     lead('ps4');
     await expect(addToPhoneContacts([{ type: 'lead', id: 'ps4' }])).rejects.toThrow(/Connect your email/);
+  });
+
+  it('the phone takes the sync key the Mac sends, keeps it, and confirms', async () => {
+    asPhone();
+    const key = 'b'.repeat(64);
+    connector.replies.push({ ok: true, keyReq: { id: 'k-1', key } });
+    await pollPhoneRequests();
+    expect(localStorage.getItem('tl.syncKey')).toBe(key);
+    expect(connector.calls.find((c) => c.keyAck)).toMatchObject({ keyAck: 'k-1', keyOk: true });
   });
 
   it("the phone saves what the Mac asked for and confirms; without Contacts access it says what to allow", async () => {

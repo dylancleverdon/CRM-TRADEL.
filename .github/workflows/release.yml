@@ -28,7 +28,8 @@ jobs:
           echo "code=$(( ${{ github.run_number }} + 1 ))" >> "$GITHUB_OUTPUT"
 
   sync-check:
-    # Verifies the Google Sheet sync endpoint the apps use is reachable and can read + write.
+    # Verifies the Google Sheet sync endpoint the apps use is reachable and can read + write
+    # (once the CRM is locked with its sync key, only that it answers and refuses requests without the key).
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -45,6 +46,11 @@ jobs:
           head -c 300 get.html | grep -q '^{' && head -c 600 get.html; echo
           echo "--- ping"
           post '{"action":"ping"}' | tee ping.json | head -c 1500; echo
+          if grep -q '"locked":true' ping.json && ! grep -q '"keyed":true' ping.json; then
+            echo "CRM is locked with its private sync key (good): requests without the key are refused, so the write check is skipped."
+            echo "SYNC_CHECK_PASSED"
+            exit 0
+          fi
           NOW=$(date -u +%FT%T.000Z)
           echo "--- write healthcheck row to settings tab"
           post "{\"action\":\"sync\",\"since\":0,\"changes\":{\"settings\":[{\"id\":\"_healthcheck\",\"value\":\"$NOW\",\"updatedAt\":\"$NOW\"}]}}" | head -c 600; echo

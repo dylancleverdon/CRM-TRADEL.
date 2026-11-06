@@ -1,4 +1,4 @@
-import { Check, Copy, Download, RefreshCw, Upload } from 'lucide-react';
+import { Check, Copy, Download, Eye, EyeOff, Lock, RefreshCw, Smartphone, Upload } from 'lucide-react';
 import { useState } from 'react';
 import scriptCode from '../../apps-script/Loader.gs?raw';
 import { CallingSettings } from '../components/DeskPhone';
@@ -8,10 +8,10 @@ import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_SERVICES, DEFAULT_STAGES, DEFAUL
 import { ago } from '../lib/format';
 import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
 import { DEFAULT_FOLLOW_UP_TEXT, TEXT_PLACEHOLDERS } from '../lib/texts';
-import { isAndroid, Native, platformName } from '../lib/platform';
+import { isAndroid, isDesktop, Native, openExternal, platformName } from '../lib/platform';
 import { setSetting, store, useSetting } from '../lib/store';
 import { cleanServiceName } from '../lib/services';
-import { fullResync, getSyncUrl, setSyncUrl, syncNow, testConnection, useSyncState } from '../lib/sync';
+import { fullResync, getSyncKey, getSyncUrl, lockCrm, saveSyncKey, sendKeyToPhone, setSyncUrl, syncNow, testConnection, thisDeviceId, useSecurity, useSyncState } from '../lib/sync';
 import { setThemePrefs, THEMES, useThemePrefs } from '../lib/theme';
 import { APP_VERSION, checkForUpdate, installUpdate, useUpdateState } from '../lib/updater';
 
@@ -21,6 +21,7 @@ export default function Settings() {
       <div className="split">
         <div className="stack">
           <SyncSettings />
+          <SecuritySettings />
           <CallingSettings />
           <FollowUpText />
           {isAndroid() && <PhoneContacts />}
@@ -36,6 +37,82 @@ export default function Settings() {
         </div>
       </div>
     </Page>
+  );
+}
+
+/** Lock the CRM with the private sync key, and see the daily backups. */
+function SecuritySettings() {
+  const sec = useSecurity();
+  const [key, setKey] = useState(getSyncKey());
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState('');
+  const run = async (what: string, fn: () => Promise<void>) => {
+    setBusy(what);
+    try { await fn(); } catch (e: any) { toast(e?.message || String(e)); } finally { setBusy(''); }
+  };
+  const save = () => run('save', async () => {
+    const ok = await saveSyncKey(key);
+    toast(ok ? 'Sync key saved on this device' : "That key doesn't match. Copy it again from the 🔒 Sync key tab of your Google Sheet.");
+  });
+  const send = () => run('send', async () => { await sendKeyToPhone((s) => toast(s)); toast('📱 Your phone has the key'); });
+  const lock = () => run('lock', async () => {
+    const waiting = Object.values(sec?.devices || {}).filter((d) => !d.keyed && Date.now() - d.at < 7 * 86400000);
+    if (waiting.length && !confirm(`${waiting.map((d) => d.name).join(' and ')} hasn't synced with the key yet. Once locked, it stops syncing until you add the key there (nothing is lost). Lock anyway?`)) return;
+    await lockCrm();
+    toast('🔒 Locked: only your devices with the key can use the CRM now');
+  });
+  const devices = Object.entries(sec?.devices || {}).sort((a, b) => b[1].at - a[1].at);
+  const backups = sec?.backup;
+  const lastBackup = backups?.copies.reduce((m, c) => Math.max(m, c.at), 0) || 0;
+  return (
+    <div className="card">
+      <div className="card-head"><Lock size={15} /><h3>Security &amp; backups</h3>
+        {sec && <span className={`pill ${sec.locked ? 'good' : 'warn'}`} style={{ marginLeft: 'auto' }}>{sec.locked ? 'Locked' : 'Not locked yet'}</span>}
+      </div>
+      <div className="stack">
+        {!sec && <div className="faint" style={{ fontSize: '0.82rem' }}>Checking with your sheet…</div>}
+        {sec && !sec.locked && (
+          <div className="faint" style={{ fontSize: '0.82rem' }}>
+            Anyone who finds the sync link can read or change your CRM until you lock it. Your key is in the <b>🔒 Sync key</b> tab of your Google Sheet
+            (only you can open it). Paste it here, {isDesktop() ? 'send it to your phone, ' : 'add it on your Mac too, '}then tap Lock my CRM.
+          </div>
+        )}
+        {sec?.locked && !sec.keyed && <div className="pill bad" style={{ whiteSpace: 'normal' }}>Your CRM is locked and this device doesn't have the key yet. Paste it below to start syncing again.</div>}
+        <Field label="Sync key">
+          <div className="row" style={{ gap: 6 }}>
+            <input type={show ? 'text' : 'password'} value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste the key from the 🔒 Sync key tab" autoComplete="off" />
+            <button className="btn ghost icon" title={show ? 'Hide' : 'Show'} onClick={() => setShow(!show)}>{show ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+          </div>
+        </Field>
+        <div className="row wrap" style={{ gap: 6 }}>
+          <button className="btn primary sm" disabled={!key.trim() || busy === 'save'} onClick={save}>{busy === 'save' ? 'Checking…' : 'Save key'}</button>
+          {sec?.sheetUrl && <button className="btn sm" onClick={() => openExternal(sec.sheetUrl!)}>Open my Google Sheet</button>}
+          {isDesktop() && sec?.keyed && <button className="btn sm" disabled={busy === 'send'} onClick={send}><Smartphone size={14} /> {busy === 'send' ? 'Sending…' : 'Send key to my phone'}</button>}
+          {sec?.keyed && !sec.locked && <button className="btn sm" disabled={busy === 'lock'} onClick={lock}><Lock size={14} /> Lock my CRM</button>}
+        </div>
+        {devices.length > 0 && (
+          <div style={{ fontSize: '0.84rem' }}>
+            {devices.map(([id, d]) => (
+              <div key={id} className="row" style={{ gap: 6, padding: '2px 0' }}>
+                <span className={`pill ${d.keyed ? 'good' : 'warn'}`}>{d.keyed ? 'Has the key' : 'No key yet'}</span>
+                <span>{d.name}{id === thisDeviceId() ? ' (this device)' : ''}</span>
+                <span className="faint">· {ago(new Date(d.at).toISOString())}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {backups && (
+          <div style={{ fontSize: '0.84rem' }}>
+            <b>Backups</b> <span className="faint">· two copies in your Drive, refreshed on alternating days</span>
+            <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+              <span className="faint">{lastBackup ? `Last backup ${ago(new Date(lastBackup).toISOString())}` : 'First backup runs on the next sync'}</span>
+              {backups.copies.map((c) => <button key={c.slot} className="btn ghost sm" onClick={() => openExternal(c.url)}>Copy {c.slot}{c.at ? ` (${ago(new Date(c.at).toISOString())})` : ''}</button>)}
+            </div>
+            {backups.error && <div className="pill bad" style={{ whiteSpace: 'normal', marginTop: 4 }}>Last backup failed: {backups.error}</div>}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

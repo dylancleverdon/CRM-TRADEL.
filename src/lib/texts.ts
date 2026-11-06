@@ -9,6 +9,7 @@ import { logActivity } from './actions';
 import { connectorCall, emailConnected } from './email';
 import { saveContactsOnPhone } from './phonecontacts';
 import { relayToPhone } from './phonerelay';
+import { setSyncKey, syncNow } from './sync';
 import { firstName } from './emailmatch';
 import { isAndroid, isDesktop, Native, openExternal } from './platform';
 import { getSetting, store } from './store';
@@ -92,7 +93,8 @@ const LS_CONTACT_HANDLED = 'tl.contactHandled';
 let phonePolling = false;
 
 /**
- * Desk phone mode: do what the Mac asked for, i.e. send a follow-up text and/or save people to the phone's contacts.
+ * Desk phone mode: do what the Mac asked for: send a follow-up text, save people to the phone's contacts, or take
+ * the sheet's sync key.
  * Never prompts for permissions (the phone may be face-down on the desk); the Mac is told what to allow instead.
  */
 export async function pollPhoneRequests(): Promise<void> {
@@ -113,6 +115,12 @@ export async function pollPhoneRequests(): Promise<void> {
           : e?.message || String(e);
         await connectorCall({ action: 'textPoll', phone: true, ack: req.id, ok: false, error }).catch(() => {});
       }
+    }
+    const kreq = r.keyReq;
+    if (kreq?.id && kreq.key) {
+      setSyncKey(kreq.key);
+      syncNow();
+      await connectorCall({ action: 'textPoll', phone: true, keyAck: kreq.id, keyOk: true }).catch(() => {});
     }
     const creq = r.contactReq;
     if (creq?.id && creq.id !== localStorage.getItem(LS_CONTACT_HANDLED)) {

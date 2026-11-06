@@ -6,7 +6,7 @@ import { useSyncExternalStore } from 'react';
 import { saveCalledNumber } from './phonecontacts';
 import { pollPhoneRequests } from './texts';
 import { httpRequest, isAndroid, isDesktop, Native, placeCall } from './platform';
-import { getSyncUrl } from './sync';
+import { getSyncUrl, withAuth } from './sync';
 
 const LS_DESK = 'tl.deskPhone';
 const LS_MODE = 'tl.desktopCallMode';
@@ -24,7 +24,7 @@ export const useDeskPhone = () =>
   useSyncExternalStore((fn) => { listeners.add(fn); return () => listeners.delete(fn); }, () => state);
 
 async function script(body: unknown) {
-  const res = await httpRequest(getSyncUrl(), 'POST', JSON.stringify(body));
+  const res = await httpRequest(getSyncUrl(), 'POST', JSON.stringify(withAuth(body as object)));
   let parsed: any;
   try { parsed = JSON.parse(res.text); } catch { throw new Error('Sync script did not respond'); }
   if (!parsed.ok) {

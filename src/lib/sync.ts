@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { httpRequest } from './platform';
+import { httpRequest, isAndroid, isDesktop } from './platform';
 import { store } from './store';
 import { TABLES, type TableName } from './types';
 
@@ -16,6 +16,53 @@ export const DEFAULT_SYNC_URL =
   'https://script.google.com/macros/s/AKfycbwfcYLWddHT-9JJ4-TcWJkTucaQUzKsQ8aAp5hg_jbyrlSYC5B16ZOxMZfd9WLRacC4Jw/exec';
 const LS_SINCE = 'tl.syncSince';
 const LS_LAST = 'tl.lastSyncedAt';
+const LS_KEY = 'tl.syncKey';
+const LS_DEVICE = 'tl.deviceId';
+
+// ---------------------------------------------------------------- security
+
+/** The private sync key: stored only on this device, never in the sheet's data or in the code. */
+export const getSyncKey = () => localStorage.getItem(LS_KEY) || '';
+export function setSyncKey(key: string) {
+  const k = key.trim();
+  if (k) localStorage.setItem(LS_KEY, k);
+  else localStorage.removeItem(LS_KEY);
+}
+
+function deviceInfo() {
+  let id = localStorage.getItem(LS_DEVICE);
+  if (!id) {
+    id = (crypto as any).randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem(LS_DEVICE, id);
+  }
+  return { id, name: isDesktop() ? 'Mac' : isAndroid() ? 'Android phone' : 'Browser' };
+}
+
+export const thisDeviceId = () => deviceInfo().id;
+
+/** Every request to the sheet carries this device's key (once set) and who it is. */
+export function withAuth<T extends object>(body: T) {
+  const key = getSyncKey();
+  return { ...body, ...(key ? { key } : {}), device: deviceInfo() };
+}
+
+export interface SecurityInfo {
+  locked: boolean;
+  keyed: boolean;
+  sheetUrl?: string;
+  devices?: Record<string, { name: string; keyed: boolean; at: number }>;
+  backup?: { copies: { slot: string; at: number; url: string }[]; error: string };
+}
+let security: SecurityInfo | null = null;
+const securityListeners = new Set<() => void>();
+function setSecurity(s: SecurityInfo | null | undefined) {
+  if (!s) return;
+  security = s;
+  securityListeners.forEach((l) => l());
+}
+/** What the sheet last said about the lock, this device's key, devices and backups (null = old server code). */
+export const useSecurity = () =>
+  useSyncExternalStore((fn) => { securityListeners.add(fn); return () => securityListeners.delete(fn); }, () => security);
 
 let state: SyncState = {
   status: 'idle',
@@ -55,9 +102,9 @@ export function setSyncUrl(url: string) {
   setState({ status: 'idle', error: '' });
 }
 
-async function call(body: unknown) {
+async function call(body: object) {
   const url = getSyncUrl();
-  const res = await httpRequest(url, 'POST', JSON.stringify(body));
+  const res = await httpRequest(url, 'POST', JSON.stringify(withAuth(body)));
   let parsed: any;
   try {
     parsed = JSON.parse(res.text);
@@ -66,15 +113,57 @@ async function call(body: unknown) {
       throw new Error('Google asked for sign-in. Re-deploy the Apps Script with "Who has access: Anyone".');
     throw new Error(`Unexpected response from the sync script (HTTP ${res.status}). Check the URL ends in /exec.`);
   }
-  if (!parsed.ok) throw new Error(parsed.error || 'Sync failed');
+  if (!parsed.ok) {
+    if (parsed.code === 'locked') setSecurity({ locked: true, keyed: false });
+    throw new Error(parsed.error || 'Sync failed');
+  }
+  setSecurity(parsed.security);
   return parsed;
 }
 
 export async function testConnection(url: string) {
-  const res = await httpRequest(url.trim(), 'POST', JSON.stringify({ action: 'ping' }));
+  const res = await httpRequest(url.trim(), 'POST', JSON.stringify(withAuth({ action: 'ping' })));
   const parsed = JSON.parse(res.text);
   if (!parsed.ok) throw new Error(parsed.error || 'Ping failed');
+  if (parsed.locked && !parsed.keyed) setSecurity({ locked: true, keyed: false });
+  else setSecurity(parsed.security);
   return parsed as { sheet: string };
+}
+
+/** Checks a key against the sheet without saving it. */
+export async function checkSyncKey(key: string): Promise<boolean> {
+  const res = await httpRequest(getSyncUrl(), 'POST', JSON.stringify({ ...withAuth({ action: 'ping' }), key: key.trim() }));
+  const parsed = JSON.parse(res.text);
+  return !!(parsed.ok && (parsed.security?.keyed || parsed.keyed));
+}
+
+/** Saves the key on this device and refreshes what the sheet says about it. */
+export async function saveSyncKey(key: string): Promise<boolean> {
+  const ok = await checkSyncKey(key);
+  if (!ok) return false;
+  setSyncKey(key);
+  await call({ action: 'ping' }).catch(() => {});
+  syncNow();
+  return true;
+}
+
+/**
+ * Mac: hand this device's key to the phone through the private email connector (the phone, in Desk phone mode,
+ * saves it and syncs). Throws a readable reason if it can't.
+ */
+export async function sendKeyToPhone(onStatus?: (s: string) => void): Promise<void> {
+  const key = getSyncKey();
+  if (!key) throw new Error('Save the sync key on this Mac first');
+  const { emailConnected } = await import('./email');
+  if (!emailConnected()) throw new Error('Connect your email on this Mac and the phone first (Email tab), or paste the key on the phone yourself.');
+  const { relayToPhone } = await import('./phonerelay');
+  const ack = await relayToPhone('keyRequest', { key }, 'keyAck', onStatus);
+  if (!ack.ok) throw new Error(ack.error || 'The phone could not save the key');
+}
+
+/** From now on the sheet refuses every request without the key. */
+export async function lockCrm(): Promise<void> {
+  await call({ action: 'lock' });
 }
 
 let running: Promise<void> | null = null;

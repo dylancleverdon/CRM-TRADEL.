@@ -11,10 +11,14 @@ vi.mock('../email', () => ({
   connectorCall: vi.fn(async (body: any) => { connector.calls.push(body); return connector.replies.shift() ?? { ok: true }; }),
 }));
 
-const mem = new Map<string, string>();
-vi.stubGlobal('localStorage', {
-  getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, String(v)); },
-  removeItem: (k: string) => { mem.delete(k); }, clear: () => mem.clear(),
+const mem = vi.hoisted(() => {
+  const m = new Map<string, string>();
+  // Installed before any module loads (sync.ts reads localStorage at load time).
+  (globalThis as any).localStorage = {
+    getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, String(v)); },
+    removeItem: (k: string) => { m.delete(k); }, clear: () => m.clear(),
+  };
+  return m;
 });
 
 import { matchMessages, readEmails, sentEmails, unfillEmail, unreadEmails, buildPeopleIndex, type EmailMessage } from '../emailmatch';

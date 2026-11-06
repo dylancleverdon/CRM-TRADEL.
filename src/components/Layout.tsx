@@ -5,7 +5,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { isDesktop } from '../lib/platform';
 import { unreadEmails } from '../lib/emailmatch';
 import { useTable } from '../lib/store';
-import { syncNow, useSyncState } from '../lib/sync';
+import { syncNow, useSecurity, useSyncState } from '../lib/sync';
 import { installUpdate, useUpdateState } from '../lib/updater';
 import { ago } from '../lib/format';
 import { Modal } from './ui';
@@ -69,6 +69,20 @@ function SyncErrorBanner() {
   return null;
 }
 
+/** Until the CRM is locked with the sync key, a reminder (hidden for the session once dismissed). */
+function LockBanner() {
+  const sec = useSecurity();
+  const [hidden, setHidden] = useState(() => sessionStorage.getItem('tl.lockBannerHidden') === '1');
+  if (!sec || sec.locked || hidden) return null;
+  return (
+    <div className="banner warn">
+      🔓 <span style={{ flex: 1 }}>Lock your CRM: anyone who finds the sync link can read or change it. It takes 2 minutes.</span>
+      <NavLink to="/settings" className="btn sm">Settings</NavLink>
+      <button className="btn ghost sm" onClick={() => { sessionStorage.setItem('tl.lockBannerHidden', '1'); setHidden(true); }}>Later</button>
+    </div>
+  );
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const tasks = useTable('tasks');
   const overdue = tasks.filter((t) => !t.done && t.dueAt && isPast(new Date(t.dueAt))).length;
@@ -102,6 +116,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <UpdateBanner />
         <DeskPhoneBanner />
         <SyncErrorBanner />
+        <LockBanner />
         {children}
         <nav className="bottom-nav">
           <NavLink to="/" end><Gauge size={21} />Today</NavLink>

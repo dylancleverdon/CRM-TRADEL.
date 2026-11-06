@@ -7,9 +7,9 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * for the phone (in Desk phone mode) to confirm it. Resolves with the phone's ack; throws if it never answers.
  */
 export async function relayToPhone(
-  action: 'textRequest' | 'contactRequest',
+  action: 'textRequest' | 'contactRequest' | 'keyRequest',
   body: Record<string, unknown>,
-  ackKey: 'ack' | 'contactAck',
+  ackKey: 'ack' | 'contactAck' | 'keyAck',
   onStatus?: (s: string) => void,
   timeoutMs = 90000,
 ): Promise<any> {

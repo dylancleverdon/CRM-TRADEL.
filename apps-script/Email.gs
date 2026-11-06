@@ -9,8 +9,8 @@
  *   send    - send a new email or reply in a thread
  *   get     - one message with its full text (for reading it in the CRM)
  *   markRead / readState - keep "read" in step between Gmail and the CRM
- *   textRequest / contactRequest / textPoll - the Mac asks your phone to send a follow-up text or to save
- *             people to the phone's contacts. This goes through this
+ *   textRequest / contactRequest / keyRequest / textPoll - the Mac asks your phone to send a follow-up text,
+ *             save people to the phone's contacts, or take the sheet's sync key. This goes through this
  *             connector (its URL is private to your devices) rather than the sheet's public sync URL.
  * Messages are returned to the CRM app; only emails matching a CRM lead/contact are saved by the app.
  */
@@ -47,6 +47,7 @@ function tlEmailHandle_(b) {
     if (b.action === 'readState') return tlReadState_(b);
     if (b.action === 'textRequest') return tlTextRequest_(b);
     if (b.action === 'contactRequest') return tlContactRequest_(b);
+    if (b.action === 'keyRequest') return tlKeyRequest_(b);
     if (b.action === 'textPoll') return tlTextPoll_(b);
     return { ok: false, error: 'Unknown action' };
   } catch (err) {
@@ -218,6 +219,17 @@ function tlContactRequest_(b) {
   return { ok: true, id: r.id, count: list.length, phoneSeenAgo: seen ? r.at - seen : -1 };
 }
 
+/** Hands the sheet's sync key from the Mac to the phone. Kept here at most 2 minutes, deleted once the phone has it. */
+function tlKeyRequest_(b) {
+  var key = String(b.key || '');
+  if (key.length < 32) return { ok: false, error: 'Missing sync key' };
+  var props = PropertiesService.getScriptProperties();
+  var r = { id: Utilities.getUuid(), at: Date.now(), key: key };
+  props.setProperty('tl_keyRequest', JSON.stringify(r));
+  var seen = Number(props.getProperty('tl_phoneSeen') || 0);
+  return { ok: true, id: r.id, phoneSeenAgo: seen ? r.at - seen : -1 };
+}
+
 /** The phone polls with phone:true (and acks what it did); the Mac polls without it to read the acks. */
 function tlTextPoll_(b) {
   var props = PropertiesService.getScriptProperties();
@@ -226,6 +238,14 @@ function tlTextPoll_(b) {
   if (b.ack) props.setProperty('tl_textAck', JSON.stringify({ id: String(b.ack), ok: b.ok !== false, error: String(b.error || ''), at: now }));
   if (b.contactAck) props.setProperty('tl_contactAck', JSON.stringify({ id: String(b.contactAck), ok: b.contactOk !== false, error: String(b.contactError || ''),
     saved: Number(b.contactSaved || 0), existing: Number(b.contactExisting || 0), phoneOnly: Number(b.contactPhoneOnly || 0), at: now }));
+  if (b.keyAck) {
+    props.setProperty('tl_keyAck', JSON.stringify({ id: String(b.keyAck), ok: b.keyOk !== false, error: String(b.keyError || ''), at: now }));
+    props.deleteProperty('tl_keyRequest');
+  }
+  var kreq = null, kack = null;
+  try { kreq = JSON.parse(props.getProperty('tl_keyRequest') || 'null'); } catch (e) { kreq = null; }
+  try { kack = JSON.parse(props.getProperty('tl_keyAck') || 'null'); } catch (e) { kack = null; }
+  if (kreq && now - kreq.at > 120000) { props.deleteProperty('tl_keyRequest'); kreq = null; }
   var req = null, ack = null, creq = null, cack = null;
   try { req = JSON.parse(props.getProperty('tl_textRequest') || 'null'); } catch (e) { req = null; }
   try { ack = JSON.parse(props.getProperty('tl_textAck') || 'null'); } catch (e) { ack = null; }
@@ -235,5 +255,5 @@ function tlTextPoll_(b) {
   if (creq && now - creq.at > 120000) creq = null;
   var seen = Number(props.getProperty('tl_phoneSeen') || 0);
   return { ok: true, serverTime: now, req: b.phone ? req : null, ack: ack, contactReq: b.phone ? creq : null, contactAck: cack,
-    phoneSeenAgo: seen ? now - seen : -1 };
+    keyReq: b.phone ? kreq : null, keyAck: kack, phoneSeenAgo: seen ? now - seen : -1 };
 }
