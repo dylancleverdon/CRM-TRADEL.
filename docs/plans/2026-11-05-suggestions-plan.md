@@ -12,6 +12,7 @@ This plan reviews the 10 suggestions in the `suggestions` tab of **CRM Tradelink
 | D, E (phase 1), F | Posted notes; script editing per lead; several services per opportunity | v1.0.23 |
 | G | Save called numbers to the phone's contacts (Android) | v1.0.24 |
 | I | Requests sent in chat, added to the sheet: email checked every minute with notifications and an unread dot; Unread / Read tabs; reading email in a window with Reply; save or update templates while writing; follow-up text sent through your phone | v1.0.25 |
+| J | Save to phone button: add a lead or contact to your phone contacts without calling (also from the Mac, and in bulk from the Leads list) | v1.0.26 |
 
 Still open, as planned: C phase 2 (automatic Google check: needs a Google Cloud API key) and E phase 2 (script library picked automatically per lead).
 

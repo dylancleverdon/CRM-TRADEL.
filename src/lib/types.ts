@@ -52,6 +52,8 @@ export interface Lead extends BaseRecord, Presence {
   queuedAt?: string;
   /** A call script just for this business (Call Mode → Script → Edit). Empty = your default script. */
   script?: string;
+  /** When it was saved to your phone's contacts (button or after a call). */
+  phoneContactAt?: string;
 }
 
 export type ContactStatus = 'Prospect' | 'Active Client' | 'Past Client';
@@ -77,6 +79,7 @@ export interface Contact extends BaseRecord, Presence {
   notes: string;
   queuedAt?: string;
   script?: string;
+  phoneContactAt?: string;
 }
 
 export interface Opportunity extends BaseRecord {

@@ -7,6 +7,8 @@
  */
 import { logActivity } from './actions';
 import { connectorCall, emailConnected } from './email';
+import { saveContactsOnPhone } from './phonecontacts';
+import { relayToPhone } from './phonerelay';
 import { firstName } from './emailmatch';
 import { isAndroid, isDesktop, Native, openExternal } from './platform';
 import { getSetting, store } from './store';
@@ -56,7 +58,6 @@ export function textRoute(): { route: 'phone' | 'relay' | 'none'; why?: string }
   return { route: 'none', why: 'Open TradeLink on your Mac or phone to send texts from your number.' };
 }
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Sends the text from your phone and logs it. Resolves with a short status message; throws with a readable
@@ -73,21 +74,11 @@ export async function sendFollowUpText(e: Who, phone: string, body: string, onSt
   }
   if (route === 'relay') {
     const rec = recordFor(e) || {};
-    const r = await connectorCall({ action: 'textRequest', req: { number: phone, body: text, name: rec.company || '', entityType: e.type, entityId: e.id } });
-    if (r.phoneSeenAgo < 0 || r.phoneSeenAgo > 30000)
-      onStatus?.('Waiting for your phone: open TradeLink on it and turn on Desk phone mode (connected to the same email)…');
-    else onStatus?.('Sending from your phone…');
-    const until = Date.now() + 90000;
-    while (Date.now() < until) {
-      await wait(2500);
-      const p = await connectorCall({ action: 'textPoll' }).catch(() => null);
-      if (p?.ack?.id === r.id) {
-        if (!p.ack.ok) throw new Error(p.ack.error || 'Your phone could not send it');
-        logText(e, phone, text, textActivityId(r.id));
-        return 'Text sent from your phone';
-      }
-    }
-    throw new Error("Your phone didn't pick it up. Open TradeLink on the phone, turn on Desk phone mode, and make sure email is connected there too.");
+    const ack = await relayToPhone('textRequest', { req: { number: phone, body: text, name: rec.company || '', entityType: e.type, entityId: e.id } }, 'ack',
+      (s) => onStatus?.(s === 'Sending to your phone…' ? 'Sending from your phone…' : s));
+    if (!ack.ok) throw new Error(ack.error || 'Your phone could not send it');
+    logText(e, phone, text, textActivityId(ack.requestId));
+    return 'Text sent from your phone';
   }
   // No way to send automatically: hand it to this device's messaging app.
   openExternal(`sms:${phone}?body=${encodeURIComponent(text)}`);
@@ -97,28 +88,43 @@ export async function sendFollowUpText(e: Who, phone: string, body: string, onSt
 // ---------------------------------------------------------------- the phone's side (Desk phone mode)
 
 const LS_TEXT_HANDLED = 'tl.textHandled';
-let textPolling = false;
+const LS_CONTACT_HANDLED = 'tl.contactHandled';
+let phonePolling = false;
 
-/** Desk phone mode: send texts the Mac asked for. Never prompts (the phone may be face-down on the desk). */
-export async function pollTextRequests(): Promise<void> {
-  if (!isAndroid() || !emailConnected() || textPolling) return;
-  textPolling = true;
+/**
+ * Desk phone mode: do what the Mac asked for, i.e. send a follow-up text and/or save people to the phone's contacts.
+ * Never prompts for permissions (the phone may be face-down on the desk); the Mac is told what to allow instead.
+ */
+export async function pollPhoneRequests(): Promise<void> {
+  if (!isAndroid() || !emailConnected() || phonePolling) return;
+  phonePolling = true;
   try {
     const r = await connectorCall({ action: 'textPoll', phone: true });
     const req = r.req;
-    if (!req?.id || req.id === localStorage.getItem(LS_TEXT_HANDLED)) return;
-    localStorage.setItem(LS_TEXT_HANDLED, req.id);
-    try {
-      await Native.sendSms({ number: req.number, body: req.body, noPrompt: true });
-      logText({ type: req.entityType, id: req.entityId }, req.number, req.body, textActivityId(req.id));
-      await connectorCall({ action: 'textPoll', phone: true, ack: req.id, ok: true });
-    } catch (e: any) {
-      const error = e?.code === 'denied'
-        ? 'Texting is not allowed on your phone yet: open TradeLink on the phone → Settings → Follow-up text → Allow texting'
-        : e?.message || String(e);
-      await connectorCall({ action: 'textPoll', phone: true, ack: req.id, ok: false, error }).catch(() => {});
+    if (req?.id && req.id !== localStorage.getItem(LS_TEXT_HANDLED)) {
+      localStorage.setItem(LS_TEXT_HANDLED, req.id);
+      try {
+        await Native.sendSms({ number: req.number, body: req.body, noPrompt: true });
+        logText({ type: req.entityType, id: req.entityId }, req.number, req.body, textActivityId(req.id));
+        await connectorCall({ action: 'textPoll', phone: true, ack: req.id, ok: true });
+      } catch (e: any) {
+        const error = e?.code === 'denied'
+          ? 'Texting is not allowed on your phone yet: open TradeLink on the phone → Settings → Follow-up text → Allow texting'
+          : e?.message || String(e);
+        await connectorCall({ action: 'textPoll', phone: true, ack: req.id, ok: false, error }).catch(() => {});
+      }
+    }
+    const creq = r.contactReq;
+    if (creq?.id && creq.id !== localStorage.getItem(LS_CONTACT_HANDLED)) {
+      localStorage.setItem(LS_CONTACT_HANDLED, creq.id);
+      const res = await saveContactsOnPhone(creq.contacts || [], false);
+      const done = res.saved + res.existing + res.phoneOnly;
+      await connectorCall({
+        action: 'textPoll', phone: true, contactAck: creq.id, contactOk: !res.error || done > 0, contactError: res.error,
+        contactSaved: res.saved, contactExisting: res.existing, contactPhoneOnly: res.phoneOnly,
+      }).catch(() => {});
     }
   } catch { /* offline or connector not updated yet: try again next poll */ } finally {
-    textPolling = false;
+    phonePolling = false;
   }
 }

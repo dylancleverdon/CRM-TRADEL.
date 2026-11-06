@@ -198,6 +198,7 @@ function PhoneContacts() {
       <div className="faint" style={{ fontSize: '0.82rem', marginBottom: 10 }}>
         After a call, the number is saved to this phone's contacts as "Name – Company" under your Google account, so it syncs to Google Contacts
         and shows who's calling when they call back. Numbers already in your contacts are left alone, and new ones get a "TradeLink CRM" label.
+        To add someone without calling, use <b>Save to phone</b> on their page (works from the Mac too, through this phone).
       </div>
       <div className="tabs" style={{ marginBottom: 12 }}>
         {modes.map(([m, label]) => <button key={m} className={s.mode === m ? 'on' : ''} onClick={() => update({ mode: m })}>{label}</button>)}

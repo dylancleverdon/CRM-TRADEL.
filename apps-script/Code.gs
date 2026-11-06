@@ -19,11 +19,11 @@ var TABLES = {
     'source', 'status', 'quality', 'disqualifyReason', 'tags', 'attempts', 'lastContactedAt', 'lastOutcome',
     'nextFollowUpAt', 'notes', 'convertedContactId', 'createdAt', 'updatedAt', 'deleted', '_serverTime',
     'origin', 'score', 'licenseNo', 'ubi', 'specialty', 'licenseStart', 'ownership', 'sources', 'naics', 'zip', 'queuedAt',
-    'yelpStatus', 'yelpUrl', 'yelpRating', 'yelpReviews', 'googleStatus', 'googleUrl', 'googleRating', 'googleReviews', 'presenceCheckedAt', 'script'],
+    'yelpStatus', 'yelpUrl', 'yelpRating', 'yelpReviews', 'googleStatus', 'googleUrl', 'googleRating', 'googleReviews', 'presenceCheckedAt', 'script', 'phoneContactAt'],
   contacts: ['id', 'company', 'contactName', 'title', 'phone', 'altPhone', 'email', 'website', 'trade', 'city', 'state',
     'address', 'status', 'leadId', 'tags', 'lastContactedAt', 'lastOutcome', 'nextFollowUpAt', 'notes', 'createdAt',
     'updatedAt', 'deleted', '_serverTime', 'queuedAt',
-    'yelpStatus', 'yelpUrl', 'yelpRating', 'yelpReviews', 'googleStatus', 'googleUrl', 'googleRating', 'googleReviews', 'presenceCheckedAt', 'script'],
+    'yelpStatus', 'yelpUrl', 'yelpRating', 'yelpReviews', 'googleStatus', 'googleUrl', 'googleRating', 'googleReviews', 'presenceCheckedAt', 'script', 'phoneContactAt'],
   opportunities: ['id', 'contactId', 'name', 'service', 'stage', 'monthlyValue', 'setupFee', 'probability',
     'expectedCloseDate', 'nextStep', 'lostReason', 'closedAt', 'notes', 'createdAt', 'updatedAt', 'deleted', '_serverTime'],
   activities: ['id', 'entityType', 'entityId', 'entityName', 'type', 'outcome', 'notes', 'durationSec', 'phone',
@@ -36,7 +36,7 @@ var TABLES = {
 };
 
 var DECISIONS = ['Pending', 'Approved', 'Rejected', 'Implemented', 'Duplicate'];
-var SETUP_VERSION = '7';
+var SETUP_VERSION = '8';
 var CODE_VERSION = '__CODE_VERSION__'; // stamped with the release version by CI
 
 /** Runs the full setup only once per script version (keeps every sync fast). */

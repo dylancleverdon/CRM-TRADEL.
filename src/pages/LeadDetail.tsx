@@ -6,6 +6,7 @@ import { InfoFields, QuickLinks } from '../components/Detail';
 import { NotesFeed } from '../components/Notes';
 import { Page } from '../components/Layout';
 import { PresenceCard } from '../components/Presence';
+import { PhoneContactButton } from '../components/PhoneContactButton';
 import { QueueButton } from '../components/QueueButton';
 import { TextCompose } from '../components/TextCompose';
 import { TasksPanel } from '../components/Tasks';
@@ -63,6 +64,7 @@ export default function LeadDetail() {
           <button className="btn" onClick={convert}><UserCheck size={15} /> Convert to contact</button>
         )}
         <QueueButton entity={entity} queued={!!lead.queuedAt} disabled={!lead.phone && !lead.queuedAt} />
+        <PhoneContactButton entity={entity} rec={lead} />
         <button className="btn" disabled={!lead.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
         <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
         <button className="btn call" disabled={!lead.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>

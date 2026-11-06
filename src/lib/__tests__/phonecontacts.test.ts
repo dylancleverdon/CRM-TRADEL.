@@ -4,7 +4,9 @@ const native = vi.hoisted(() => ({
   saveContact: vi.fn(async (o: any) => ({ status: 'saved', name: `${o.name} – ${o.company}`, account: o.account })),
   checkPermissions: vi.fn(async () => ({ contacts: 'granted' })),
 }));
-vi.mock('../platform', () => ({ isAndroid: () => true, Native: native }));
+vi.mock('../platform', () => ({ isAndroid: () => true, isDesktop: () => false, Native: native }));
+// The email module reads localStorage when it loads; these tests don't need it.
+vi.mock('../email', () => ({ emailConnected: () => false, connectorCall: vi.fn() }));
 
 import { DEFAULT_CONTACT_ACCOUNT, saveCalledNumber, shouldSave } from '../phonecontacts';
 import { store } from '../store';

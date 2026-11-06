@@ -19,7 +19,7 @@ vi.stubGlobal('localStorage', {
 
 import { matchMessages, readEmails, sentEmails, unfillEmail, unreadEmails, buildPeopleIndex, type EmailMessage } from '../emailmatch';
 import { store } from '../store';
-import { DEFAULT_FOLLOW_UP_TEXT, fillText, pollTextRequests, sendFollowUpText, textRoute } from '../texts';
+import { DEFAULT_FOLLOW_UP_TEXT, fillText, pollPhoneRequests, sendFollowUpText, textRoute } from '../texts';
 
 const lead = () => store.upsert('leads', { id: 'tx1', company: 'American First Air', contactName: 'Juan Andrade', phone: '3239975336' } as any);
 const textActs = () => store.list('activities').filter((a) => a.type === 'text' && a.entityId === 'tx1');
@@ -81,7 +81,7 @@ describe('follow-up texts', () => {
     lead();
     const req = { id: 'req-11', number: '3239975336', body: 'Sent via phone', entityType: 'lead', entityId: 'tx1' };
     connector.replies.push({ ok: true, req });
-    await pollTextRequests();
+    await pollPhoneRequests();
     expect(native.sendSms).toHaveBeenCalledWith({ number: '3239975336', body: 'Sent via phone', noPrompt: true });
     expect(connector.calls[connector.calls.length - 1]).toMatchObject({ action: 'textPoll', ack: 'req-11', ok: true });
     expect(store.get('activities', 'tx-req-11')?.type).toBe('text');

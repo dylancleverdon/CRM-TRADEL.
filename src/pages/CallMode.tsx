@@ -7,6 +7,7 @@ import { QuickLinks } from '../components/Detail';
 import { DeskPhoneToggle } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
 import { NotesFeed } from '../components/Notes';
+import { PhoneContactButton } from '../components/PhoneContactButton';
 import { PresenceCard } from '../components/Presence';
 import { ScriptCard } from '../components/ScriptCard';
 import { TextCompose } from '../components/TextCompose';
@@ -124,6 +125,7 @@ export default function CallMode() {
                     <button className="btn" onClick={() => setLeadQuality(rec, 'bad')}><ThumbsDown size={15} /> Bad</button>
                   </>}
                   <button className="btn" onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
+                  <PhoneContactButton entity={{ type: cur.type, id: cur.id }} rec={rec} />
                   <Link className="btn" to={cur.type === 'lead' ? `/leads/${cur.id}` : `/contacts/${cur.id}`}><ExternalLink size={15} /> Open</Link>
                 </div>
                 <div className="faint" style={{ fontSize: '0.8rem', marginTop: 12 }}>

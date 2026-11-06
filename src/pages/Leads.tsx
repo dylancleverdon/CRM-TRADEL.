@@ -1,4 +1,4 @@
-import { ListPlus, Phone, Plus, Search } from 'lucide-react';
+import { ListPlus, Phone, Plus, Search, Smartphone } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
@@ -8,6 +8,7 @@ import { Empty, QualityPill, StatusPill, toast } from '../components/ui';
 import { setLeadStatus, setQueued } from '../lib/actions';
 import { DEFAULT_TRADES, LEAD_STATUSES } from '../lib/constants';
 import { ago, formatPhone, shortDate } from '../lib/format';
+import { addToPhoneContacts } from '../lib/phonecontacts';
 import { presenceMatch } from '../lib/presence';
 import { getSetting, store, useTable } from '../lib/store';
 import type { Lead, LeadStatus } from '../lib/types';
@@ -78,6 +79,16 @@ export default function Leads() {
       setSel(new Set());
       return;
     }
+    if (action === 'phone') {
+      const withPhone = ids.filter((id) => store.get('leads', id)?.phone);
+      if (!withPhone.length) { toast('None of these have a phone number'); return; }
+      toast(`📇 Saving ${withPhone.length} to your phone contacts…`);
+      addToPhoneContacts(withPhone.map((id) => ({ type: 'lead', id })), (s) => toast(s))
+        .then((m) => toast(`📇 ${m}`))
+        .catch((e) => toast(e?.message || String(e)));
+      setSel(new Set());
+      return;
+    }
     if (action === 'delete') {
       if (!confirm(`Delete ${ids.length} leads?`)) return;
       ids.forEach((id) => store.remove('leads', id));
@@ -125,6 +136,7 @@ export default function Leads() {
               <option value="">Set status…</option>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
             <button className="btn sm" onClick={() => bulk('queue')}><ListPlus size={14} /> Add to call queue</button>
+            <button className="btn sm" onClick={() => bulk('phone')}><Smartphone size={14} /> Save to phone contacts</button>
             <button className="btn bad sm" onClick={() => bulk('delete')}>Delete</button>
             <button className="btn ghost sm" onClick={() => setSel(new Set())}>Clear</button>
           </div>

@@ -197,6 +197,7 @@ export function convertLead(lead: Lead): Contact {
     notes: lead.notes,
     queuedAt: lead.queuedAt || '',
     script: lead.script || '',
+    phoneContactAt: lead.phoneContactAt || '',
     ...Object.fromEntries(PRESENCE_FIELDS.map((k) => [k, lead[k] || ''])),
   });
   store.upsert('leads', { id: lead.id, status: 'Converted', quality: 'good', convertedContactId: contact.id, ...(lead.queuedAt ? { queuedAt: '' } : {}) });

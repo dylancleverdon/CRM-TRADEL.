@@ -4,7 +4,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { saveCalledNumber } from './phonecontacts';
-import { pollTextRequests } from './texts';
+import { pollPhoneRequests } from './texts';
 import { httpRequest, isAndroid, isDesktop, Native, placeCall } from './platform';
 import { getSyncUrl } from './sync';
 
@@ -59,7 +59,7 @@ export async function waitForAck(id: string, timeoutMs = 20000): Promise<boolean
 const LS_HANDLED = 'tl.deskHandled';
 let timer: any = null;
 let textTimer: any = null;
-/** Texts the Mac asks the phone to send (through the private email connector). */
+/** Texts / contacts the Mac asks the phone to send or save (through the private email connector). */
 const TEXT_POLL_MS = 5000;
 let polling = false;
 
@@ -94,8 +94,8 @@ function applyListener() {
   if (state.enabled) {
     pollOnce();
     timer = setInterval(pollOnce, POLL_MS);
-    pollTextRequests();
-    textTimer = setInterval(pollTextRequests, TEXT_POLL_MS);
+    pollPhoneRequests();
+    textTimer = setInterval(pollPhoneRequests, TEXT_POLL_MS);
   } else set({ listening: false });
 }
 

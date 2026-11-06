@@ -7,6 +7,7 @@ import { NotesFeed } from '../components/Notes';
 import { Page } from '../components/Layout';
 import { NewOpportunity, OpportunityModal } from '../components/Opportunity';
 import { PresenceCard } from '../components/Presence';
+import { PhoneContactButton } from '../components/PhoneContactButton';
 import { QueueButton } from '../components/QueueButton';
 import { TextCompose } from '../components/TextCompose';
 import { exportCsv, ExportIcon, useIsMobile } from '../components/RecordForm';
@@ -153,6 +154,7 @@ export function ContactDetail() {
       actions={<>
         <button className="btn" onClick={() => setNewOpp(true)}><Briefcase size={15} /> New opportunity</button>
         <QueueButton entity={entity} queued={!!c.queuedAt} disabled={!c.phone && !c.queuedAt} />
+        <PhoneContactButton entity={entity} rec={c} />
         <button className="btn" disabled={!c.phone} onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
         <button className="btn" onClick={() => logManual(entity)}><StickyNote size={15} /> Log call</button>
         <button className="btn call" disabled={!c.phone} onClick={() => startCall(entity)}><Phone size={15} /> Call</button>

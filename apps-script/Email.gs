@@ -9,7 +9,8 @@
  *   send    - send a new email or reply in a thread
  *   get     - one message with its full text (for reading it in the CRM)
  *   markRead / readState - keep "read" in step between Gmail and the CRM
- *   textRequest / textPoll - the Mac asks your phone to send a follow-up text. This goes through this
+ *   textRequest / contactRequest / textPoll - the Mac asks your phone to send a follow-up text or to save
+ *             people to the phone's contacts. This goes through this
  *             connector (its URL is private to your devices) rather than the sheet's public sync URL.
  * Messages are returned to the CRM app; only emails matching a CRM lead/contact are saved by the app.
  */
@@ -45,6 +46,7 @@ function tlEmailHandle_(b) {
     if (b.action === 'markRead') return tlMarkRead_(b);
     if (b.action === 'readState') return tlReadState_(b);
     if (b.action === 'textRequest') return tlTextRequest_(b);
+    if (b.action === 'contactRequest') return tlContactRequest_(b);
     if (b.action === 'textPoll') return tlTextPoll_(b);
     return { ok: false, error: 'Unknown action' };
   } catch (err) {
@@ -202,16 +204,36 @@ function tlTextRequest_(b) {
   return { ok: true, id: r.id, phoneSeenAgo: seen ? r.at - seen : -1 };
 }
 
-/** The phone polls with phone:true (and acks what it sent); the Mac polls without it to read the ack. */
+/** Save people to the phone's contacts (up to 20 per request: script properties hold 9 KB each). */
+function tlContactRequest_(b) {
+  var list = (b.contacts || []).slice(0, 20).map(function (c) {
+    return { name: String(c.name || '').slice(0, 120), company: String(c.company || '').slice(0, 120), title: String(c.title || '').slice(0, 60),
+      phone: String(c.phone || '').slice(0, 30), note: String(c.note || '').slice(0, 160), entityType: String(c.entityType || ''), entityId: String(c.entityId || '').slice(0, 60) };
+  }).filter(function (c) { return c.phone; });
+  if (!list.length) return { ok: false, error: 'No phone numbers to save' };
+  var props = PropertiesService.getScriptProperties();
+  var r = { id: Utilities.getUuid(), at: Date.now(), contacts: list };
+  props.setProperty('tl_contactRequest', JSON.stringify(r));
+  var seen = Number(props.getProperty('tl_phoneSeen') || 0);
+  return { ok: true, id: r.id, count: list.length, phoneSeenAgo: seen ? r.at - seen : -1 };
+}
+
+/** The phone polls with phone:true (and acks what it did); the Mac polls without it to read the acks. */
 function tlTextPoll_(b) {
   var props = PropertiesService.getScriptProperties();
   var now = Date.now();
   if (b.phone) props.setProperty('tl_phoneSeen', String(now));
   if (b.ack) props.setProperty('tl_textAck', JSON.stringify({ id: String(b.ack), ok: b.ok !== false, error: String(b.error || ''), at: now }));
-  var req = null, ack = null;
+  if (b.contactAck) props.setProperty('tl_contactAck', JSON.stringify({ id: String(b.contactAck), ok: b.contactOk !== false, error: String(b.contactError || ''),
+    saved: Number(b.contactSaved || 0), existing: Number(b.contactExisting || 0), phoneOnly: Number(b.contactPhoneOnly || 0), at: now }));
+  var req = null, ack = null, creq = null, cack = null;
   try { req = JSON.parse(props.getProperty('tl_textRequest') || 'null'); } catch (e) { req = null; }
   try { ack = JSON.parse(props.getProperty('tl_textAck') || 'null'); } catch (e) { ack = null; }
-  if (req && now - req.at > 120000) req = null; // stale requests are never sent
+  try { creq = JSON.parse(props.getProperty('tl_contactRequest') || 'null'); } catch (e) { creq = null; }
+  try { cack = JSON.parse(props.getProperty('tl_contactAck') || 'null'); } catch (e) { cack = null; }
+  if (req && now - req.at > 120000) req = null; // stale requests are never acted on
+  if (creq && now - creq.at > 120000) creq = null;
   var seen = Number(props.getProperty('tl_phoneSeen') || 0);
-  return { ok: true, serverTime: now, req: b.phone ? req : null, ack: ack, phoneSeenAgo: seen ? now - seen : -1 };
+  return { ok: true, serverTime: now, req: b.phone ? req : null, ack: ack, contactReq: b.phone ? creq : null, contactAck: cack,
+    phoneSeenAgo: seen ? now - seen : -1 };
 }
