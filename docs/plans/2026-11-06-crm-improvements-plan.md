@@ -4,15 +4,15 @@ Agreed with Dylan after a brainstorm. The biggest blocker right now is **getting
 
 In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is dropped, including the automatic Google check, sequences, nurture, the "sorry I missed you" text, proposals, client tracking, search and duplicates.
 
-| # | What | Ships as |
-|---|---|---|
-| 1 | Lock the sync link with a private key | first |
-| 2 | Daily backups, keep 2 | with 1 |
-| 6 | Save and call next + keyboard shortcuts | next |
-| 9 | Lead engine (learns who books meetings) | with 12 |
-| 12 | Dashboard scorecard + "when owners pick up" heatmap | with 9 |
-| 15 | Phone: simpler lead page, follow-up reminders (opt-in) | after |
-| 7 | Google Calendar invites with Google Meet | last; needs a one-time connector update |
+| # | What | Ships as | Status |
+|---|---|---|---|
+| 1 | Lock the sync link with a private key | first | Shipped in v1.0.27 |
+| 2 | Daily backups, keep 2 | with 1 | Shipped in v1.0.27 |
+| 6 | Save and call next + keyboard shortcuts | next | Shipped in v1.0.28 |
+| 9 | Lead engine (learns who books meetings) | with 12 | |
+| 12 | Dashboard scorecard + "when owners pick up" heatmap | with 9 | |
+| 15 | Phone: simpler lead page, follow-up reminders (opt-in) | after | |
+| 7 | Google Calendar invites with Google Meet | last; needs a one-time connector update | |
 
 ---
 
@@ -49,7 +49,8 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
 
 - **The button.** The call outcome form gets a primary **Save and call next** whenever Call Mode is open. It saves the outcome, moves to the next lead and rings the phone right away, with no countdown.
 - **Enter.** Enter presses **Save and call next**, even while typing notes; Shift+Enter adds a new line in the notes.
-- **Outcome keys.** **1–0** pick outcomes, but only when you're not typing.
+- **Outcome keys.** **1–0** pick outcomes, but only when you're not typing. Do Not Call has no key, so it's never picked by accident.
+- **Notes.** The form opens without the cursor in the notes, so 1 + Enter logs a no-answer. **N** jumps to the notes; **Esc** while typing just stops typing, a second **Esc** discards.
 - **Call Mode keys.** **Space** calls, **S** skips, **T** texts.
 - **Meeting Booked.** Converts the lead and creates the opportunity in the background, then calls the next lead.
 

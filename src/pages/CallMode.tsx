@@ -1,6 +1,6 @@
 import { BellRing, ExternalLink, ListPlus, MessageSquare, Phone, RefreshCw, Search, SkipForward, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { startOfDay } from 'date-fns';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
 import { QuickLinks } from '../components/Detail';
@@ -18,6 +18,7 @@ import {
   type CallSession, type CallType, type RecGetter,
 } from '../lib/callsession';
 import { DEFAULT_GOALS, DEFAULT_TRADES } from '../lib/constants';
+import { callModeKey } from '../lib/keys';
 import { ago, formatPhone, when } from '../lib/format';
 import { buildCallQueue, dayStats, dncPhones } from '../lib/queue';
 import { getSetting, store, useSetting, useTable } from '../lib/store';
@@ -33,7 +34,7 @@ export default function CallMode() {
   const acts = useTable('activities');
   const [session, setSession] = useState<CallSession>(loadSession);
   const [texting, setTexting] = useState(false);
-  const { startCall, onLogged } = useCall();
+  const { startCall, onLogged, onNext } = useCall();
   const goals = useSetting('goals', DEFAULT_GOALS);
   const trades = getSetting('trades', DEFAULT_TRADES);
   const trade = session.trade;
@@ -48,6 +49,26 @@ export default function CallMode() {
   const today = dayStats(acts.filter((a) => a.occurredAt >= startOfDay(new Date()).toISOString()));
 
   useEffect(() => { onLogged(() => {}); return () => onLogged(null); }, []);
+
+  // "Save and call next": once the call is saved, the next business comes up and gets called.
+  const curRef = useRef(cur);
+  curRef.current = cur;
+  const pendingNext = useRef<{ from: string; at: number } | null>(null);
+  useEffect(() => {
+    onNext({
+      canCallNext: (e) => curRef.current?.id === e.id,
+      callNext: (e) => { pendingNext.current = { from: e.id, at: Date.now() }; },
+    });
+    return () => onNext(null);
+  }, []);
+  useEffect(() => {
+    const p = pendingNext.current;
+    if (!p) return;
+    if (Date.now() - p.at > 15000) { pendingNext.current = null; return; }
+    if (!cur || cur.id === p.from) return; // the next batch may still be locking in
+    pendingNext.current = null;
+    startCall({ type: cur.type, id: cur.id });
+  }, [cur?.id]);
   useEffect(() => saveSession(session), [session]);
   // A new day starts a new session.
   useEffect(() => { if (session.day !== dayKey()) setSession(freshSession(session.trade)); });
@@ -64,7 +85,31 @@ export default function CallMode() {
     if ((cur?.id || '') !== session.currentId) setSession((s) => ({ ...s, currentId: cur?.id || '' }));
   }, [cur?.id]);
 
-  const skip = () => cur && setSession((s) => ({ ...s, skipped: [...s.skipped, cur.id], currentId: '' }));
+  const skip = () => {
+    const c = curRef.current;
+    if (!c) return;
+    pendingNext.current = null;
+    setSession((s) => ({ ...s, skipped: [...s.skipped, c.id], currentId: '' }));
+  };
+
+  // Keys (when no window is open and you aren't typing): Space calls, S skips, T texts.
+  const keyActions = useRef({ skip, text: () => setTexting(true) });
+  keyActions.current = { skip, text: () => setTexting(true) };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || document.querySelector('.modal-back')) return;
+      const what = callModeKey(e);
+      const c = curRef.current;
+      if (!what || !c) return;
+      e.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur?.(); // so a focused button isn't pressed as well
+      if (what === 'call') startCall({ type: c.type, id: c.id });
+      else if (what === 'skip') keyActions.current.skip();
+      else keyActions.current.text();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [startCall]);
   const newBatch = () => { setSession((s) => freshSession(s.trade, s)); toast('Fresh batch locked in'); };
   const addDue = () => {
     const base = Date.now();
@@ -80,7 +125,7 @@ export default function CallMode() {
       title="Call Mode"
       sub={`${inQueue} in queue · ${today.calls}/${goals.calls} calls · ${today.connects} connects · ${today.meetings} meetings today`}
       actions={<>
-        <select style={{ width: 170 }} value={trade} onChange={(e) => setSession((s) => freshSession(e.target.value, s))}>
+        <select style={{ width: 170 }} value={trade} onChange={(e) => { pendingNext.current = null; setSession((s) => freshSession(e.target.value, s)); }}>
           <option value="">All trades</option>{trades.map((t) => <option key={t}>{t}</option>)}
         </select>
         {session.skipped.length > 0 && <button className="btn" onClick={() => setSession((s) => ({ ...s, skipped: [] }))}>Reset skipped ({session.skipped.length})</button>}
@@ -117,7 +162,7 @@ export default function CallMode() {
                 <div className="co">{rec.company}</div>
                 <div className="muted">{[rec.contactName, rec.trade, [rec.city, rec.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}</div>
                 <div className="ph">{formatPhone(rec.phone)}</div>
-                <button className="btn call lg" style={{ minWidth: 220 }} onClick={() => startCall({ type: cur.type, id: cur.id })}><Phone size={20} /> Call now</button>
+                <button className="btn call lg" style={{ minWidth: 220 }} onClick={() => startCall({ type: cur.type, id: cur.id })} title="Space"><Phone size={20} /> Call now</button>
                 <div className="row" style={{ justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
                   <button className="btn" onClick={skip}><SkipForward size={15} /> Skip</button>
                   {cur.type === 'lead' && <>
@@ -127,6 +172,9 @@ export default function CallMode() {
                   <button className="btn" onClick={() => setTexting(true)}><MessageSquare size={15} /> Text</button>
                   <PhoneContactButton entity={{ type: cur.type, id: cur.id }} rec={rec} />
                   <Link className="btn" to={cur.type === 'lead' ? `/leads/${cur.id}` : `/contacts/${cur.id}`}><ExternalLink size={15} /> Open</Link>
+                </div>
+                <div className="key-legend" style={{ marginTop: 8 }}>
+                  <kbd className="key">Space</kbd> call · <kbd className="key">S</kbd> skip · <kbd className="key">T</kbd> text
                 </div>
                 <div className="faint" style={{ fontSize: '0.8rem', marginTop: 12 }}>
                   {rec.attempts ? `${rec.attempts} previous attempts · ` : ''}Last contact {ago(rec.lastContactedAt)}{rec.lastOutcome ? ` (${rec.lastOutcome})` : ''}

@@ -1,11 +1,12 @@
 import { App as CapApp } from '@capacitor/app';
-import { Phone, PhoneOff } from 'lucide-react';
+import { Phone, PhoneForwarded, PhoneOff } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { convertLead, createOpportunity, entityName, entityPhone, followUpDate, logCall, type Entity } from '../lib/actions';
 import { CALL_OUTCOMES, DEFAULT_SERVICES } from '../lib/constants';
 import { duration, formatPhone, fromLocalInput, toLocalInput } from '../lib/format';
 import { getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
+import { isTyping, outcomeForKey, outcomeKey } from '../lib/keys';
 import { isAndroid, isDesktop, placeCall } from '../lib/platform';
 import { saveCalledNumber } from '../lib/phonecontacts';
 import { fillText, getFollowUpText, sendFollowUpText } from '../lib/texts';
@@ -15,13 +16,22 @@ import { Field, Modal, toast } from './ui';
 
 interface PendingCall { entity: Entity; phone: string; startedAt: string; name: string }
 
+/** Call Mode registers this so the outcome form can offer "Save and call next". */
+export interface NextHandler {
+  /** True when this call is the business on Call Mode's screen, so there is a "next" to call. */
+  canCallNext: (entity: Entity) => boolean;
+  /** Runs once the outcome is saved: Call Mode calls whoever comes up next. */
+  callNext: (entity: Entity) => void;
+}
+
 interface CallCtx {
   startCall: (entity: Entity, phone?: string) => void;
   logManual: (entity: Entity) => void;
   onLogged: (fn: (() => void) | null) => void;
+  onNext: (h: NextHandler | null) => void;
 }
 
-const Ctx = createContext<CallCtx>({ startCall: () => {}, logManual: () => {}, onLogged: () => {} });
+const Ctx = createContext<CallCtx>({ startCall: () => {}, logManual: () => {}, onLogged: () => {}, onNext: () => {} });
 export const useCall = () => useContext(Ctx);
 
 const PENDING_KEY = 'tl.pendingCall';
@@ -30,6 +40,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<PendingCall | null>(null);
   const [showForm, setShowForm] = useState(false);
   const loggedCb = useRef<(() => void) | null>(null);
+  const [nextHandler, setNextHandler] = useState<NextHandler | null>(null);
+  const onNext = useCallback((h: NextHandler | null) => setNextHandler(() => h), []);
 
   // Resume flow on Android: after the dialer closes and the app comes back, prompt for the outcome.
   useEffect(() => {
@@ -87,17 +99,21 @@ export function CallProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ startCall, logManual, onLogged: (fn) => { loggedCb.current = fn; } }}>
+    <Ctx.Provider value={{ startCall, logManual, onLogged: (fn) => { loggedCb.current = fn; }, onNext }}>
       {children}
       {active && showForm && (
-        <OutcomeForm call={active} onDone={() => { close(); loggedCb.current?.(); }} onCancel={close} />
+        <OutcomeForm call={active} next={nextHandler} onDone={() => { close(); loggedCb.current?.(); }} onCancel={close} />
       )}
     </Ctx.Provider>
   );
 }
 
-function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: () => void; onCancel: () => void }) {
+function OutcomeForm({ call, next, onDone, onCancel }: {
+  call: PendingCall; next: NextHandler | null; onDone: () => void; onCancel: () => void;
+}) {
   const navigate = useNavigate();
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
   const [outcome, setOutcome] = useState('');
   const [notes, setNotes] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -125,7 +141,14 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
 
   const quick = (days: number) => setFollowUp(toLocalInput(followUpDate(days).toISOString()));
 
-  const save = () => {
+  // From Call Mode, for the business on screen: save, then call whoever is next.
+  const canNext = !!next?.canCallNext(call.entity);
+  const finish = (andNext: boolean) => {
+    onDone();
+    if (andNext) next?.callNext(call.entity);
+  };
+
+  const save = (andNext = false) => {
     if (!outcome) { toast('Pick an outcome'); return; }
     const dur = durationMin ? Math.round(Number(durationMin) * 60) : elapsed;
     logCall({
@@ -151,13 +174,50 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
       if (lead) {
         const contact = convertLead(lead);
         const opp = createOpportunity(contact, { service, stage: 'Discovery Booked', nextStep: followTitle || 'Discovery call' });
+        if (andNext) {
+          // Done in the background so you keep dialing; it's under Contacts and Opportunities.
+          toast(`🎉 ${contact.company || call.name} is now a contact with an opportunity`);
+          finish(true);
+          return;
+        }
         onDone();
         navigate(`/contacts/${contact.id}?opp=${opp.id}`);
         return;
       }
     }
-    onDone();
+    finish(andNext);
   };
+
+  // Keys: 1–0 pick an outcome and N jumps to the notes (when you aren't typing); Enter saves (and calls next from
+  // Call Mode), Shift+Enter is a new line; Esc stops typing, a second Esc discards.
+  const keys = useRef({ save, pick, canNext });
+  keys.current = { save, pick, canNext };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || e.defaultPrevented) return;
+      const mine = bodyRef.current?.closest('.modal-back');
+      const open = document.querySelectorAll('.modal-back');
+      if (!mine || open[open.length - 1] !== mine) return; // another window is open on top of this one
+      const t = e.target as HTMLElement | null;
+      const typing = isTyping(t);
+      if (e.key === 'Escape' && typing) {
+        e.preventDefault(); e.stopPropagation(); t?.blur();
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+        if (t?.closest?.('.modal-foot, .modal-head')) return; // a focused button there does its own thing
+        e.preventDefault();
+        keys.current.save(keys.current.canNext);
+        return;
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      const name = outcomeForKey(e.key);
+      if (name) { e.preventDefault(); keys.current.pick(name); return; }
+      if (e.key === 'n' || e.key === 'N') { e.preventDefault(); notesRef.current?.focus(); }
+    };
+    window.addEventListener('keydown', onKey, true); // capture: runs before the window's Esc-to-close
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
 
   const isLead = call.entity.type === 'lead';
   const connectedOutcome = !!CALL_OUTCOMES.find((o) => o.name === outcome)?.connected;
@@ -168,10 +228,13 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
       onClose={onCancel}
       footer={<>
         <button className="btn ghost" onClick={onCancel}><PhoneOff size={15} /> Discard</button>
-        <button className="btn primary" onClick={save}>Save outcome</button>
+        {canNext ? <>
+          <button className="btn" onClick={() => save(false)}>Save</button>
+          <button className="btn primary" onClick={() => save(true)} title="Enter"><PhoneForwarded size={15} /> Save and call next</button>
+        </> : <button className="btn primary" onClick={() => save(false)} title="Enter">Save outcome</button>}
       </>}
     >
-      <div className="stack">
+      <div className="stack" ref={bodyRef}>
         <div className="row muted" style={{ fontSize: '0.85rem' }}>
           <span>{formatPhone(call.phone)}</span><span>•</span>
           <span>Started {new Date(call.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><span>•</span>
@@ -180,13 +243,18 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
         <div>
           <div className="field" style={{ marginBottom: 6 }}>How did it go?</div>
           <div className="chips">
-            {CALL_OUTCOMES.map((o) => (
-              <button key={o.name} className={`chip ${o.color} ${outcome === o.name ? 'on' : ''}`} onClick={() => pick(o.name)}>{o.name}</button>
-            ))}
+            {CALL_OUTCOMES.map((o) => {
+              const k = outcomeKey(o.name);
+              return (
+                <button key={o.name} className={`chip ${o.color} ${outcome === o.name ? 'on' : ''}`} onClick={() => pick(o.name)} title={k ? `Key ${k}` : undefined}>
+                  {k && <kbd className="key">{k}</kbd>}{o.name}
+                </button>
+              );
+            })}
           </div>
         </div>
         <Field label="Notes">
-          <textarea autoFocus value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What happened? Pain points, who you spoke with, objections…" rows={4} />
+          <textarea ref={notesRef} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What happened? Pain points, who you spoke with, objections…" rows={4} />
         </Field>
         <div className="form-grid">
           <Field label="Talk time (minutes, optional)">
@@ -229,6 +297,10 @@ function OutcomeForm({ call, onDone, onCancel }: { call: PendingCall; onDone: ()
             )}
           </div>
         )}
+        <div className="key-legend">
+          <kbd className="key">1</kbd>–<kbd className="key">0</kbd> outcome · <kbd className="key">N</kbd> notes ·{' '}
+          <kbd className="key">Enter</kbd> {canNext ? 'save and call next' : 'save'} · <kbd className="key">Shift</kbd>+<kbd className="key">Enter</kbd> new line · <kbd className="key">Esc</kbd> discard
+        </div>
       </div>
     </Modal>
   );
