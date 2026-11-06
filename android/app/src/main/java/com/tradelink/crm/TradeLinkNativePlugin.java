@@ -12,6 +12,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.CommonDataKinds.Note;
@@ -54,6 +55,7 @@ import java.util.concurrent.Executors;
  *  - http():       network requests without browser CORS limits (Google Apps Script sync, update checks)
  *  - installApk(): self-update by downloading the newest APK and opening the Android installer
  *  - sendSms():    sends a text from the phone's own number (follow-up texts, also when the Mac asks)
+ *  - lastCall():   how long the latest call to a number lasted, from the phone's call log (talk time)
  *  - saveContact(): saves a called number to the phone's contacts under a Google account, so it syncs to
  *                   Google Contacts and shows as caller ID; listAccounts(): Google accounts syncing contacts here
  */
@@ -62,13 +64,73 @@ import java.util.concurrent.Executors;
     permissions = {
         @Permission(strings = { Manifest.permission.CALL_PHONE }, alias = "call"),
         @Permission(strings = { Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS }, alias = "contacts"),
-        @Permission(strings = { Manifest.permission.SEND_SMS }, alias = "sms")
+        @Permission(strings = { Manifest.permission.SEND_SMS }, alias = "sms"),
+        @Permission(strings = { Manifest.permission.READ_CALL_LOG }, alias = "callLog")
     }
 )
 public class TradeLinkNativePlugin extends Plugin {
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private File pendingApk = null;
+
+    // ------------------------------------------------------------------ talk time (call log)
+
+    /** The latest call to `number` since `since` (ms): { found, duration (s), date (ms), outgoing }. */
+    @PluginMethod
+    public void lastCall(PluginCall call) {
+        if (getPermissionState("callLog") != PermissionState.GRANTED) {
+            if (call.getBoolean("noPrompt", false)) {
+                JSObject r = new JSObject();
+                r.put("found", false);
+                r.put("denied", true);
+                call.resolve(r);
+                return;
+            }
+            requestPermissionForAlias("callLog", call, "callLogPermsCallback");
+            return;
+        }
+        readLastCall(call);
+    }
+
+    @PermissionCallback
+    private void callLogPermsCallback(PluginCall call) {
+        if (getPermissionState("callLog") != PermissionState.GRANTED) {
+            JSObject r = new JSObject();
+            r.put("found", false);
+            r.put("denied", true);
+            call.resolve(r);
+            return;
+        }
+        readLastCall(call);
+    }
+
+    private static String lastTen(String n) {
+        String d = n == null ? "" : n.replaceAll("[^0-9]", "");
+        return d.length() > 10 ? d.substring(d.length() - 10) : d;
+    }
+
+    private void readLastCall(PluginCall call) {
+        String want = lastTen(call.getString("number", ""));
+        long since = call.getData().optLong("since", 0L) - 60000L;
+        JSObject r = new JSObject();
+        r.put("found", false);
+        if (want.isEmpty()) { call.resolve(r); return; }
+        String[] cols = { CallLog.Calls.NUMBER, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.TYPE };
+        try (Cursor c = getContext().getContentResolver().query(CallLog.Calls.CONTENT_URI, cols,
+                CallLog.Calls.DATE + " >= ?", new String[] { String.valueOf(since) }, CallLog.Calls.DATE + " DESC")) {
+            while (c != null && c.moveToNext()) {
+                if (!want.equals(lastTen(c.getString(0)))) continue;
+                r.put("found", true);
+                r.put("date", c.getLong(1));
+                r.put("duration", c.getLong(2));
+                r.put("outgoing", c.getInt(3) == CallLog.Calls.OUTGOING_TYPE);
+                break;
+            }
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("Could not read the call log: " + e.getMessage());
+        }
+    }
 
     // ------------------------------------------------------------------ calls
 

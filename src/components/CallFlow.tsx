@@ -5,20 +5,21 @@ import { useNavigate } from 'react-router-dom';
 import { convertLead, createOpportunity, entityName, entityPhone, followUpDate, logCall, type Entity } from '../lib/actions';
 import { CALL_OUTCOMES, DEFAULT_SERVICES } from '../lib/constants';
 import { duration, formatPhone, fromLocalInput, toLocalInput } from '../lib/format';
-import { getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
+import { cancelRing, getDesktopCallMode, ringPhone, waitForAck } from '../lib/deskphone';
 import { emailConnected } from '../lib/email';
 import { emailsIn } from '../lib/emailmatch';
 import { isTyping, outcomeForKey, outcomeKey } from '../lib/keys';
 import { bookMeeting, type Pick as MeetingPick } from '../lib/meetings';
 import { isAndroid, isDesktop, placeCall } from '../lib/platform';
 import { saveCalledNumber } from '../lib/phonecontacts';
+import { callLogSeconds, guessTalkSec } from '../lib/talktime';
 import { fillText, getFollowUpText, sendFollowUpText } from '../lib/texts';
 import { serviceList, toggleService } from '../lib/services';
 import { getSetting, store } from '../lib/store';
 import { MeetingPicker } from './MeetingPicker';
 import { Field, Modal, toast } from './ui';
 
-interface PendingCall { entity: Entity; phone: string; startedAt: string; name: string; pick?: string }
+interface PendingCall { entity: Entity; phone: string; startedAt: string; name: string; pick?: string; manual?: boolean }
 
 /** Call Mode registers this so the outcome form can offer "Save and call next". */
 export interface NextHandler {
@@ -63,6 +64,15 @@ export function CallProvider({ children }: { children: ReactNode }) {
     return () => { h.then((x) => x.remove()); };
   }, []);
 
+  // A call that never got dialed: close its outcome form (only if it's still that call's form).
+  const giveUp = useCallback((startedAt: string) => {
+    const saved = localStorage.getItem(PENDING_KEY);
+    try { if (saved && JSON.parse(saved).startedAt !== startedAt) return; } catch { /* ignore */ }
+    localStorage.removeItem(PENDING_KEY);
+    setShowForm(false);
+    setActive((a) => (a && a.startedAt === startedAt ? null : a));
+  }, []);
+
   const startCall = useCallback(async (entity: Entity, phone?: string, pick?: string) => {
     const num = phone || entityPhone(entity.type, entity.id);
     if (!num) { toast('No phone number on this record'); return; }
@@ -75,12 +85,15 @@ export function CallProvider({ children }: { children: ReactNode }) {
       toast('📱 Sending call to your phone…');
       ringPhone({ number: num, name: p.name, entityType: entity.type, entityId: entity.id })
         .then(async (r) => {
-          if (r.phoneSeenAgo < 0 || r.phoneSeenAgo > 20000)
-            toast('Phone isn’t listening — open TradeLink on your phone and turn on Desk phone mode (request waits 45s)');
-          const ok = await waitForAck(r.id, 45000);
-          toast(ok ? '📞 Your phone is dialing' : 'Phone didn’t pick up the call request');
+          if (r.phoneSeenAgo < 0 || r.phoneSeenAgo > 20000) toast('Your phone doesn’t seem connected. Waiting 15 seconds for it…');
+          const ok = await waitForAck(r.id, 15000);
+          if (ok) { toast('📞 Your phone is dialing'); return; }
+          // Nothing was dialed: cancel the request so the phone never dials it later, and close the outcome form.
+          await cancelRing(r.id);
+          giveUp(p.startedAt);
+          toast('📵 Your phone isn’t connected, so nothing was dialed. Open TradeLink on the phone with Desk phone mode on, then press Call again.');
         })
-        .catch((e) => toast(e?.message || 'Could not reach your phone'));
+        .catch((e) => { giveUp(p.startedAt); toast(e?.message || 'Could not reach your phone'); });
       return;
     }
     try {
@@ -93,7 +106,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logManual = useCallback((entity: Entity) => {
-    setActive({ entity, phone: entityPhone(entity.type, entity.id), startedAt: new Date().toISOString(), name: entityName(entity.type, entity.id) });
+    setActive({ entity, phone: entityPhone(entity.type, entity.id), startedAt: new Date().toISOString(), name: entityName(entity.type, entity.id), manual: true });
     setShowForm(true);
   }, []);
 
@@ -122,7 +135,6 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
   const [outcome, setOutcome] = useState('');
   const [notes, setNotes] = useState('');
   const [elapsed, setElapsed] = useState(0);
-  const [durationMin, setDurationMin] = useState('');
   const [followUp, setFollowUp] = useState<string>('');
   const [followTitle, setFollowTitle] = useState('');
   const [convert, setConvert] = useState(true);
@@ -177,8 +189,9 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
     if (!outcome) { toast('Pick an outcome'); return; }
     if (inviting && !slot) { toast('Pick the meeting time for the invite, or untick “Send a Google Calendar invite”'); return; }
     if (inviting && !emailsIn(inviteTo).length) { toast('Add their email so the invite can go out'); return; }
-    const dur = durationMin ? Math.round(Number(durationMin) * 60) : elapsed;
-    logCall({
+    // Talk time: a guess now (start → saving the outcome); the phone's call log replaces it when it has the call.
+    const dur = call.manual ? 0 : guessTalkSec(call.startedAt, Date.now(), connectedOutcome);
+    const act = logCall({
       entity: call.entity,
       outcome,
       notes,
@@ -190,6 +203,11 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
       pick: call.pick,
     });
     toast(`Logged: ${outcome}`);
+    if (isAndroid() && !call.manual) {
+      callLogSeconds(call.phone, Date.parse(call.startedAt), false)
+        .then((sec) => { if (sec !== null && sec !== act.durationSec) store.upsert('activities', { id: act.id, durationSec: sec }); })
+        .catch(() => {});
+    }
     saveCalledNumber(call.entity, call.phone, outcome).then((m) => m && toast(m));
     if (sendText && connectedOutcome) {
       toast('📱 Sending your follow-up text…');
@@ -288,9 +306,6 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
           <textarea ref={notesRef} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What happened? Pain points, who you spoke with, objections…" rows={4} />
         </Field>
         <div className="form-grid">
-          <Field label="Talk time (minutes, optional)">
-            <input type="number" min="0" step="0.5" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="auto" />
-          </Field>
           <Field label="Follow-up">
             <input type="datetime-local" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
           </Field>

@@ -112,6 +112,7 @@ function handle_(body) {
     }
     if (body.action === 'callRequest') return callRequest_(body);
     if (body.action === 'callPoll') return callPoll_(body);
+    if (body.action === 'callCancel') return callCancel_(body);
     return { ok: false, error: 'Unknown action' };
   } catch (err) {
     return { ok: false, error: String(err && err.stack || err) };
@@ -432,6 +433,18 @@ function callRequest_(body) {
   return { ok: true, id: req.id, serverTime: req.at, phoneSeenAgo: seen ? req.at - seen : -1 };
 }
 
+/** A call request the phone hasn't picked up within this long is dropped (the Mac tells you to try again). */
+var CALL_REQUEST_MS = 15000;
+
+/** The Mac gave up waiting: make sure the phone never dials it later. */
+function callCancel_(body) {
+  var props = PropertiesService.getScriptProperties();
+  var req = null;
+  try { req = JSON.parse(props.getProperty('callRequest') || 'null'); } catch (e) { req = null; }
+  if (req && (!body.id || req.id === body.id)) props.deleteProperty('callRequest');
+  return { ok: true };
+}
+
 function callPoll_(body) {
   var props = PropertiesService.getScriptProperties();
   var now = Date.now();
@@ -439,7 +452,7 @@ function callPoll_(body) {
   if (body.phone) props.setProperty('phoneSeen', String(now));
   var req = null;
   try { req = JSON.parse(props.getProperty('callRequest') || 'null'); } catch (e) { req = null; }
-  if (req && now - req.at > 45000) req = null; // stale requests are ignored
+  if (req && now - req.at > CALL_REQUEST_MS) req = null; // never dial a call the Mac has given up on
   var seen = Number(props.getProperty('phoneSeen') || 0);
   return { ok: true, serverTime: now, req: req, ack: props.getProperty('callAck') || '', phoneSeenAgo: seen ? now - seen : -1 };
 }

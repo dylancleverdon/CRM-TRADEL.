@@ -102,11 +102,11 @@ export interface CallLog {
   pick?: string;
 }
 
-export function logCall(c: CallLog) {
+export function logCall(c: CallLog): Activity {
   const def = outcomeDef(c.outcome);
   const rec: { script?: string } | undefined = c.entity.type === 'lead' ? store.get('leads', c.entity.id)
     : c.entity.type === 'contact' ? store.get('contacts', c.entity.id) : undefined;
-  logActivity(c.entity, {
+  const act = logActivity(c.entity, {
     type: 'call',
     outcome: c.outcome,
     notes: c.notes,
@@ -145,6 +145,7 @@ export function logCall(c: CallLog) {
   }
   if (c.followUp) addTask(c.entity, c.followUpTitle || `Follow up (${c.outcome})`, c.followUp, def?.connected ? 'High' : 'Normal');
   else refreshFollowUp(c.entity);
+  return act;
 }
 
 /**

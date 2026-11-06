@@ -32,7 +32,8 @@ interface NativePlugin {
     Promise<{ status: 'saved' | 'saved-on-phone' | 'exists'; name?: string; account?: string }>;
   listAccounts(): Promise<{ accounts: string[] }>;
   sendSms(opts: { number: string; body: string; noPrompt?: boolean }): Promise<{ parts: number }>;
-  checkPermissions(): Promise<{ call?: string; contacts?: string; sms?: string }>;
+  lastCall(opts: { number: string; since: number; noPrompt?: boolean }): Promise<{ found: boolean; duration?: number; date?: number; outgoing?: boolean; denied?: boolean }>;
+  checkPermissions(): Promise<{ call?: string; contacts?: string; sms?: string; callLog?: string }>;
   requestPermissions(opts?: { permissions: string[] }): Promise<{ call?: string; contacts?: string; sms?: string }>;
   addListener(event: 'downloadProgress', cb: (d: { progress: number }) => void): Promise<PluginListenerHandle>;
 }

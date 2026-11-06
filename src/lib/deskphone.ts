@@ -2,6 +2,7 @@
  * "Ring my phone": the Mac app places calls through the Android phone.
  * Mac  -> callRequest (stored in the Apps Script) -> phone polls every 3s -> phone dials.
  */
+import { fillTalkTimes, rememberDialed } from './talktime';
 import { useSyncExternalStore } from 'react';
 import { saveCalledNumber } from './phonecontacts';
 import { pollPhoneRequests } from './texts';
@@ -42,6 +43,11 @@ export async function ringPhone(req: RingRequest): Promise<{ id: string; phoneSe
   return script({ action: 'callRequest', req });
 }
 
+/** Mac: the phone didn't answer in time; make sure it never dials this later. */
+export async function cancelRing(id: string): Promise<void> {
+  try { await script({ action: 'callCancel', id }); } catch { /* the sheet drops it after 15s anyway */ }
+}
+
 /** Mac: wait (up to ~20s) for the phone to confirm it started dialing. */
 export async function waitForAck(id: string, timeoutMs = 20000): Promise<boolean> {
   const end = Date.now() + timeoutMs;
@@ -61,6 +67,7 @@ let timer: any = null;
 let textTimer: any = null;
 /** Texts / contacts the Mac asks the phone to send or save (through the private email connector). */
 const TEXT_POLL_MS = 5000;
+let talkTick = 0;
 let polling = false;
 
 async function pollOnce() {
@@ -73,6 +80,7 @@ async function pollOnce() {
     if (req && req.id && req.id !== localStorage.getItem(LS_HANDLED)) {
       localStorage.setItem(LS_HANDLED, req.id);
       set({ lastCall: `${req.name || req.number} · ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` });
+      rememberDialed(req.entityId, req.number);
       await placeCall(req.number);
       saveCalledNumber({ type: req.entityType, id: req.entityId }, req.number, null, false).catch(() => {});
       script({ action: 'callPoll', phone: true, ack: req.id }).catch(() => {});
@@ -95,7 +103,10 @@ function applyListener() {
     pollOnce();
     timer = setInterval(pollOnce, POLL_MS);
     pollPhoneRequests();
-    textTimer = setInterval(pollPhoneRequests, TEXT_POLL_MS);
+    textTimer = setInterval(() => {
+      pollPhoneRequests();
+      if (++talkTick % 4 === 0) fillTalkTimes().catch(() => {}); // real talk time for calls dialed for the Mac
+    }, TEXT_POLL_MS);
   } else set({ listening: false });
 }
 

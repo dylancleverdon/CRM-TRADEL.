@@ -7,7 +7,7 @@
  */
 import { logActivity } from './actions';
 import { connectorCall, emailConnected } from './email';
-import { saveContactsOnPhone } from './phonecontacts';
+import { addToPhoneContacts, saveContactsOnPhone } from './phonecontacts';
 import { relayToPhone } from './phonerelay';
 import { setSyncKey, syncNow } from './sync';
 import { firstName } from './emailmatch';
@@ -71,11 +71,12 @@ export async function sendFollowUpText(e: Who, phone: string, body: string, onSt
   if (route === 'phone') {
     await Native.sendSms({ number: phone, body: text });
     logText(e, phone, text);
+    addToPhoneContacts([e]).catch(() => {}); // anyone you text gets saved to your contacts
     return 'Text sent';
   }
   if (route === 'relay') {
     const rec = recordFor(e) || {};
-    const ack = await relayToPhone('textRequest', { req: { number: phone, body: text, name: rec.company || '', entityType: e.type, entityId: e.id } }, 'ack',
+    const ack = await relayToPhone('textRequest', { req: { number: phone, body: text, name: rec.company || '', contactName: rec.contactName || '', entityType: e.type, entityId: e.id } }, 'ack',
       (s) => onStatus?.(s === 'Sending to your phone…' ? 'Sending from your phone…' : s));
     if (!ack.ok) throw new Error(ack.error || 'Your phone could not send it');
     logText(e, phone, text, textActivityId(ack.requestId));
@@ -109,6 +110,9 @@ export async function pollPhoneRequests(): Promise<void> {
         await Native.sendSms({ number: req.number, body: req.body, noPrompt: true });
         logText({ type: req.entityType, id: req.entityId }, req.number, req.body, textActivityId(req.id));
         await connectorCall({ action: 'textPoll', phone: true, ack: req.id, ok: true });
+        // Anyone you text gets saved to your contacts (from what the Mac sent, in case this phone doesn't have the lead).
+        saveContactsOnPhone([{ name: req.contactName || '', company: req.name || '', title: '', phone: req.number, note: 'Added by TradeLink CRM',
+          entityType: req.entityType, entityId: req.entityId }], false).catch(() => {});
       } catch (e: any) {
         const error = e?.code === 'denied'
           ? 'Texting is not allowed on your phone yet: open TradeLink on the phone → Settings → Follow-up text → Allow texting'

@@ -371,7 +371,8 @@ function tlTextRequest_(b) {
   if (!req.number || !req.body) return { ok: false, error: 'Missing number or message' };
   var props = PropertiesService.getScriptProperties();
   var r = { id: Utilities.getUuid(), at: Date.now(), number: String(req.number), body: String(req.body).slice(0, 1500),
-    name: String(req.name || ''), entityType: String(req.entityType || ''), entityId: String(req.entityId || '') };
+    name: String(req.name || ''), contactName: String(req.contactName || '').slice(0, 100),
+    entityType: String(req.entityType || ''), entityId: String(req.entityId || '') };
   props.setProperty('tl_textRequest', JSON.stringify(r));
   var seen = Number(props.getProperty('tl_phoneSeen') || 0);
   return { ok: true, id: r.id, phoneSeenAgo: seen ? r.at - seen : -1 };

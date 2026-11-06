@@ -16,3 +16,18 @@ describe('Code.gs: a nameless lead never blanks out the sheet', () => {
     expect(s.handle({ action: 'sync', since: 0, changes: {} }).changes.leads.find((x: any) => x.id === 'L2').notes).toBe('');
   });
 });
+
+describe('Code.gs: the phone never dials a call the Mac gave up on', () => {
+  it('a cancelled request is gone, and an unanswered one expires after 15 seconds', () => {
+    const s = loadCodeGs();
+    const r = s.handle({ action: 'callRequest', req: { number: '2065550100' } });
+    expect(s.handle({ action: 'callPoll', phone: true }).req.id).toBe(r.id);
+    s.handle({ action: 'callCancel', id: r.id });
+    expect(s.handle({ action: 'callPoll', phone: true }).req).toBeNull();
+    const r2 = s.handle({ action: 'callRequest', req: { number: '2065550101' } });
+    const stored = JSON.parse(s.props.get('callRequest')!);
+    s.props.set('callRequest', JSON.stringify({ ...stored, at: stored.at - 16000 }));
+    expect(s.handle({ action: 'callPoll', phone: true }).req).toBeNull();
+    expect(r2.ok).toBe(true);
+  });
+});

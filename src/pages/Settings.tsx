@@ -12,6 +12,7 @@ import { useEngineSettings } from '../lib/useEngine';
 import { connectorCall, emailConnected } from '../lib/email';
 import { calendarReady, DEFAULT_MEETINGS, meetingSettings, WEEKDAYS, type MeetingSettings } from '../lib/meetings';
 import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
+import { allowCallLog } from '../lib/talktime';
 import { allowExactTiming, nextReminder, reminderAccess, remindersOn, rescheduleAllReminders, scheduledCount, setReminders, type ReminderAccess } from '../lib/reminders';
 import { DEFAULT_FOLLOW_UP_TEXT, TEXT_PLACEHOLDERS } from '../lib/texts';
 import { isAndroid, isDesktop, Native, openExternal, platformName } from '../lib/platform';
@@ -32,6 +33,7 @@ export default function Settings() {
           <FollowUpText />
           {isAndroid() && <PhoneContacts />}
           {isAndroid() && <ReminderSettings />}
+          {isAndroid() && <TalkTimeSettings />}
           <Appearance />
           <Updates />
         </div>
@@ -214,6 +216,22 @@ function MeetingSettingsCard() {
         <Field label="Invite title ({company} {firstName} {myName})"><InlineInput value={s.title} onSave={(v) => set({ title: v || DEFAULT_MEETINGS.title })} /></Field>
         <Field label="Invite description" full><InlineInput value={s.description} onSave={(v) => set({ description: v || DEFAULT_MEETINGS.description })} /></Field>
       </div>
+    </div>
+  );
+}
+
+/** Talk time comes from the phone's call log (for calls made here and calls the Mac rings through it). */
+function TalkTimeSettings() {
+  const [state, setState] = useState<string>('');
+  useEffect(() => { Native.checkPermissions().then((p) => setState(p.callLog || '')).catch(() => {}); }, []);
+  const allow = async () => { const ok = await allowCallLog(); setState(ok ? 'granted' : 'denied'); toast(ok ? 'Talk time will come from your call log' : 'Call log access is off: Android Settings → Apps → TradeLink CRM → Permissions'); };
+  return (
+    <div className="card">
+      <div className="card-head"><h3>Talk time</h3>{state === 'granted' && <span className="pill good" style={{ marginLeft: 'auto' }}>From your call log</span>}</div>
+      <div className="faint" style={{ fontSize: '0.82rem' }}>
+        How long each call lasted is read from this phone's call log, also for calls your Mac rings through it. Without access it's estimated from when the call started to when you saved the outcome.
+      </div>
+      {state !== 'granted' && <button className="btn sm" style={{ marginTop: 10 }} onClick={allow}>Allow call log access</button>}
     </div>
   );
 }
