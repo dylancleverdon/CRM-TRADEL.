@@ -3,15 +3,18 @@ import { CalendarCheck, Check, Circle, Clock, DollarSign, Phone, PhoneCall, Phon
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCall } from '../components/CallFlow';
+import { Breakdown, EngineStatus, PickupHeatmap, Scorecard } from '../components/Insights';
 import { Page } from '../components/Layout';
 import { entityLink, TaskRow } from '../components/Tasks';
 import { Empty, Progress } from '../components/ui';
 import { isClosed, stages } from '../lib/actions';
 import { DEFAULT_GOALS, outcomeDef } from '../lib/constants';
 import { duration, money, when } from '../lib/format';
+import { rankQueue } from '../lib/engine';
 import { buildCallQueue, dayStats } from '../lib/queue';
+import { useEngineModel } from '../lib/useEngine';
 import { unreadEmails } from '../lib/emailmatch';
-import { useSetting, useTable } from '../lib/store';
+import { store, useSetting, useTable } from '../lib/store';
 
 export default function Dashboard() {
   const leads = useTable('leads');
@@ -23,6 +26,7 @@ export default function Dashboard() {
   const myName = useSetting('myName', '');
   const { startCall } = useCall();
   const navigate = useNavigate();
+  const { model, settings: eng } = useEngineModel();
 
   const d = useMemo(() => {
     const sod = startOfDay(new Date()).toISOString();
@@ -57,6 +61,8 @@ export default function Dashboard() {
     const replies = unreadEmails(acts);
     return { emailsSent, replies, todayActs, s, overdue, dueToday, doneToday, qualified, disq, converted, newLeads, newOpps, openOpps, mrr, weighted, wonMonth, week, queue, outcomes, now };
   }, [acts, tasks, leads, contacts, opps]);
+
+  const upNext = useMemo(() => rankQueue(d.queue, model, (id) => store.get('leads', id), { experiments: eng.experiments, head: 10 }), [d.queue, model, eng.experiments]);
 
   const checklist = [
     { label: `Make ${goals.calls} calls`, done: d.s.calls >= goals.calls, progress: `${d.s.calls}/${goals.calls}` },
@@ -123,6 +129,16 @@ export default function Dashboard() {
         </div>
 
         <div className="split">
+          <Scorecard acts={acts} />
+          <EngineStatus model={model} experiments={eng.experiments} acts={acts} />
+        </div>
+
+        <div className="split">
+          <PickupHeatmap acts={acts} />
+          <Breakdown acts={acts} />
+        </div>
+
+        <div className="split">
           <div className="card">
             <div className="card-head"><Check size={16} /><h3>Done today</h3><span className="faint" style={{ marginLeft: 'auto', fontSize: '0.8rem' }}>{d.todayActs.length} actions</span></div>
             {Object.keys(d.outcomes).length > 0 && (
@@ -152,13 +168,13 @@ export default function Dashboard() {
                 <Link to="/call" className="btn sm primary" style={{ marginLeft: 'auto' }}>Call mode</Link>
               </div>
               {d.queue.length === 0 && <Empty>Queue is empty. Add or import leads.</Empty>}
-              {d.queue.slice(0, 5).map((q) => (
+              {upNext.slice(0, 5).map((q) => (
                 <div className="list-item" key={q.type + q.id}>
                   <div className="grow clickable" onClick={() => navigate(entityLink(q.type, q.id))}>
                     <div className="title">{q.company}</div>
                     <div className="meta">{q.reason}</div>
                   </div>
-                  <button className="btn call sm" onClick={() => startCall({ type: q.type, id: q.id })}><Phone size={14} /></button>
+                  <button className="btn call sm" onClick={() => startCall({ type: q.type, id: q.id }, undefined, q.pick)}><Phone size={14} /></button>
                 </div>
               ))}
             </div>

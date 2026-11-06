@@ -5,7 +5,9 @@ import { CallingSettings } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
 import { Field, InlineInput, toast } from '../components/ui';
 import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_SERVICES, DEFAULT_STAGES, DEFAULT_TRADES, GITHUB_REPO, type StageDef } from '../lib/constants';
+import { DEFAULT_ENGINE, GOAL_LABEL, type EngineGoal } from '../lib/engine';
 import { ago } from '../lib/format';
+import { useEngineSettings } from '../lib/useEngine';
 import { connectorCall, emailConnected } from '../lib/email';
 import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
 import { DEFAULT_FOLLOW_UP_TEXT, TEXT_PLACEHOLDERS } from '../lib/texts';
@@ -31,6 +33,7 @@ export default function Settings() {
         </div>
         <div className="stack">
           <Profile />
+          <LeadEngineSettings />
           <ListSetting title="Services you sell (opportunity types)" k="services" fallback={DEFAULT_SERVICES} />
           <ListSetting title="Trades (industries)" k="trades" fallback={DEFAULT_TRADES} />
           <Stages />
@@ -138,6 +141,36 @@ function ConnectorLock({ crmLocked }: { crmLocked: boolean }) {
   if (st.locked) return line('bad', 'Email connector locked', "this device doesn't have the key yet");
   if (st.old) return line('warn', 'Email connector', 'updating itself to the version that locks with your key (within 10 minutes)');
   return line('warn', 'Email connector not locked yet', crmLocked ? 'it locks itself within 10 minutes' : 'it locks together with your CRM');
+}
+
+function LeadEngineSettings() {
+  const eng = useEngineSettings();
+  const set = (patch: Partial<typeof eng>) => setSetting('engine', { ...eng, ...patch });
+  return (
+    <div className="card">
+      <div className="card-head"><h3>Lead engine</h3></div>
+      <div className="faint" style={{ fontSize: '0.82rem', marginBottom: 10 }}>
+        Orders Call Mode by what has worked: every call teaches it which trades, cities, business ages and types pick up and
+        book. Due follow-ups and My queue always come first, and nobody is ever left out.
+      </div>
+      <div className="form-grid">
+        <Field label="Optimize for">
+          <select value={eng.goal} onChange={(e) => set({ goal: e.target.value as EngineGoal })}>
+            {(Object.keys(GOAL_LABEL) as EngineGoal[]).map((g) => <option key={g} value={g}>{GOAL_LABEL[g]}{g === DEFAULT_ENGINE.goal ? ' (recommended now)' : ''}</option>)}
+          </select>
+        </Field>
+        <Field label="Experiments in every 10 calls">
+          <select value={eng.experiments} onChange={(e) => set({ experiments: Number(e.target.value) })}>
+            {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}{n === DEFAULT_ENGINE.experiments ? ' (default)' : ''}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="faint" style={{ fontSize: '0.78rem', marginTop: 8 }}>
+        Experiments try businesses it knows least about, so it keeps learning. It keeps every call's connects, meetings and deal value,
+        so switching what it optimizes for uses all your history.
+      </div>
+    </div>
+  );
 }
 
 function SyncSettings() {

@@ -98,10 +98,14 @@ export interface CallLog {
   followUp: string | null; // ISO or null
   followUpTitle?: string;
   startedAt?: string;
+  /** Why it was called, from Call Mode (proven / experiment / queue / followup). */
+  pick?: string;
 }
 
 export function logCall(c: CallLog) {
   const def = outcomeDef(c.outcome);
+  const rec: { script?: string } | undefined = c.entity.type === 'lead' ? store.get('leads', c.entity.id)
+    : c.entity.type === 'contact' ? store.get('contacts', c.entity.id) : undefined;
   logActivity(c.entity, {
     type: 'call',
     outcome: c.outcome,
@@ -109,6 +113,8 @@ export function logCall(c: CallLog) {
     durationSec: c.durationSec,
     phone: c.phone,
     occurredAt: c.startedAt || nowIso(),
+    pick: c.pick || '',
+    scriptKind: rec ? (rec.script?.trim() ? 'custom' : 'default') : '',
   });
   closeOpenFollowUps(c.entity);
   const ts = nowIso();

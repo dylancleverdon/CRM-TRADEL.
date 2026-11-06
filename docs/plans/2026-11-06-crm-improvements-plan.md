@@ -9,8 +9,8 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
 | 1 | Lock the sync link with a private key | first | Shipped in v1.0.27 |
 | 2 | Daily backups, keep 2 | with 1 | Shipped in v1.0.27 |
 | 6 | Save and call next + keyboard shortcuts | next | Shipped in v1.0.28 |
-| 9 | Lead engine (learns who books meetings) | with 12 | |
-| 12 | Dashboard scorecard + "when owners pick up" heatmap | with 9 | |
+| 9 | Lead engine (learns who books meetings) | with 12 | Shipped in v1.0.30 |
+| 12 | Dashboard scorecard + "when owners pick up" heatmap | with 9 | Shipped in v1.0.30 |
 | 15 | Phone: simpler lead page, follow-up reminders (opt-in) | after | |
 | 7 | Google Calendar invites with Google Meet | last; needs a one-time connector update | |
 
@@ -76,6 +76,14 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
 - **Why this lead.** Call Mode shows it, e.g. "Proven · HVAC, licensed < 1 yr: 4 meetings / 50 dials" or "Experiment · Electrical in Everett: 3 dials so far".
 - **Best time.** Call Mode shows best-time-to-call hints once there's enough data.
 - **Tagging.** Every logged call records whether it was proven, an experiment, from My queue, or a follow-up.
+
+**As built (v1.0.30).**
+- Estimate per trait value: connect rate (shrunk toward the average over 20 dials) × meetings per connect, judged as meetings vs the meetings its connects would be expected to bring (3 meetings' benefit of the doubt). Your daily goals (60 → 12 → 2) are the starting averages. Traits combine at half weight, since they overlap.
+- A trait is "proven" with 10+ dials and a lift above 5%. Until then the reason shown is the old one (e.g. "NEW business · score 92").
+- Experiments are picked by the trade + city with the fewest dials (then the least-known trade, city, age and type), spread so two experiments in a batch try different places. Every 5th spot is an experiment at the default 2 per 10.
+- Pipeline value = 12 × monthly value + setup fee of the deals from that lead, credited to the call that booked the meeting; closed deals = deals in a won stage.
+- Best hours: an hour needs 8+ calls and 60+ calls in total, and must beat the average pick-up by 15%.
+- Every call stores `pick` (proven / experiment / queue / followup) and `scriptKind` (default / custom): two new columns on the sheet's activities tab.
 
 ## 12. Dashboard
 

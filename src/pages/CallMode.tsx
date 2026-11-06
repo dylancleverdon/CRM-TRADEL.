@@ -1,4 +1,4 @@
-import { BellRing, ExternalLink, ListPlus, MessageSquare, Phone, RefreshCw, Search, SkipForward, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { BellRing, Clock, ExternalLink, FlaskConical, ListPlus, MessageSquare, Phone, RefreshCw, Search, SkipForward, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { startOfDay } from 'date-fns';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,7 +18,9 @@ import {
   type CallSession, type CallType, type RecGetter,
 } from '../lib/callsession';
 import { DEFAULT_GOALS, DEFAULT_TRADES } from '../lib/constants';
+import { bestTimes, DAY_SHORT, hourLabel, pickupGrid, rankQueue } from '../lib/engine';
 import { callModeKey } from '../lib/keys';
+import { useEngineModel } from '../lib/useEngine';
 import { ago, formatPhone, when } from '../lib/format';
 import { buildCallQueue, dayStats, dncPhones } from '../lib/queue';
 import { getSetting, store, useSetting, useTable } from '../lib/store';
@@ -39,7 +41,11 @@ export default function CallMode() {
   const trades = getSetting('trades', DEFAULT_TRADES);
   const trade = session.trade;
 
-  const auto = useMemo(() => buildCallQueue(leads, contacts, tasks, { trade }), [leads, contacts, tasks, trade]);
+  const base = useMemo(() => buildCallQueue(leads, contacts, tasks, { trade }), [leads, contacts, tasks, trade]);
+  // The lead engine orders the queue (follow-ups stay first) and spends a few spots per batch on experiments.
+  const { model, settings: eng } = useEngineModel();
+  const auto = useMemo(() => rankQueue(base, model, (id) => store.get('leads', id), { experiments: eng.experiments }), [base, model, eng.experiments]);
+  const times = useMemo(() => bestTimes(pickupGrid(acts, new Date(Date.now() - 90 * 86400000).toISOString())), [acts]);
   const dnc = useMemo(() => dncPhones(leads), [leads]);
   const manual = useMemo(() => manualQueue(leads, contacts), [leads, contacts]);
   const view = resolveSession(session, manual, getRec, dnc);
@@ -67,7 +73,7 @@ export default function CallMode() {
     if (Date.now() - p.at > 15000) { pendingNext.current = null; return; }
     if (!cur || cur.id === p.from) return; // the next batch may still be locking in
     pendingNext.current = null;
-    startCall({ type: cur.type, id: cur.id });
+    startCall({ type: cur.type, id: cur.id }, undefined, cur.pick);
   }, [cur?.id]);
   useEffect(() => saveSession(session), [session]);
   // A new day starts a new session.
@@ -103,7 +109,7 @@ export default function CallMode() {
       if (!what || !c) return;
       e.preventDefault();
       (document.activeElement as HTMLElement | null)?.blur?.(); // so a focused button isn't pressed as well
-      if (what === 'call') startCall({ type: c.type, id: c.id });
+      if (what === 'call') startCall({ type: c.type, id: c.id }, undefined, c.pick);
       else if (what === 'skip') keyActions.current.skip();
       else keyActions.current.text();
     };
@@ -131,7 +137,14 @@ export default function CallMode() {
         {session.skipped.length > 0 && <button className="btn" onClick={() => setSession((s) => ({ ...s, skipped: [] }))}>Reset skipped ({session.skipped.length})</button>}
       </>}
     >
-      <div style={{ marginBottom: 14 }}><Progress value={today.calls} max={goals.calls} /></div>
+      <div style={{ marginBottom: times.best.length ? 8 : 14 }}><Progress value={today.calls} max={goals.calls} /></div>
+      {times.best.length > 0 && (
+        <div className="row wrap faint" style={{ fontSize: '0.8rem', marginBottom: 12, gap: 6 }}>
+          <Clock size={13} /> Owners pick up most: {times.best.map((b) => `${DAY_SHORT[b.day]} ${hourLabel(b.hour)} (${Math.round((b.connects / b.dials) * 100)}%)`).join(' · ')}
+          {' '}· average {Math.round(times.overall * 100)}%
+          {times.best.some((b) => b.day === new Date().getDay() && b.hour === new Date().getHours()) && <span className="pill good">Now is one of them</span>}
+        </div>
+      )}
       <div className="hide-desktop" style={{ marginBottom: 12 }}><DeskPhoneToggle /></div>
       {dueNow.length > 0 && (
         <div className="card row wrap" style={{ marginBottom: 12, background: 'var(--warn-soft)', padding: '10px 14px' }}>
@@ -155,14 +168,17 @@ export default function CallMode() {
             <div className="card">
               <div className="call-hero">
                 <div className="row" style={{ justifyContent: 'center', marginBottom: 8, gap: 6 }}>
-                  <span className="pill accent">{cur.reason}</span>
+                  <span className={`pill ${cur.pick === 'experiment' ? 'info' : 'accent'}`} style={{ whiteSpace: 'normal', textAlign: 'center' }}
+                    title={cur.pick === 'experiment' ? 'An experiment: the lead engine knows little about this kind of business yet' : undefined}>
+                    {cur.pick === 'experiment' && <FlaskConical size={12} />}{cur.reason}
+                  </span>
                   {cur.type === 'lead' ? <StatusPill status={rec.status} /> : <span className="pill info">Contact</span>}
                   {cur.type === 'lead' && <QualityPill q={rec.quality} />}
                 </div>
                 <div className="co">{rec.company}</div>
                 <div className="muted">{[rec.contactName, rec.trade, [rec.city, rec.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}</div>
                 <div className="ph">{formatPhone(rec.phone)}</div>
-                <button className="btn call lg" style={{ minWidth: 220 }} onClick={() => startCall({ type: cur.type, id: cur.id })} title="Space"><Phone size={20} /> Call now</button>
+                <button className="btn call lg" style={{ minWidth: 220 }} onClick={() => startCall({ type: cur.type, id: cur.id }, undefined, cur.pick)} title="Space"><Phone size={20} /> Call now</button>
                 <div className="row" style={{ justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
                   <button className="btn" onClick={skip}><SkipForward size={15} /> Skip</button>
                   {cur.type === 'lead' && <>

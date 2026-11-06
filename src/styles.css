@@ -278,3 +278,25 @@ td .strong { font-weight: 600; color: var(--text); }
 .bottom-nav button { position: relative; }
 .unread-dot { width: 9px; height: 9px; border-radius: 99px; background: var(--accent); flex: none; margin: 0 4px; }
 .email-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.92rem; line-height: 1.55; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; max-height: 46vh; overflow-y: auto; }
+
+/* ---------- "When owners pick up" heatmap: four steps of your accent's hue (--heat-0..3, set by the theme) ---------- */
+.heat-wrap { position: relative; }
+.heat-scroll { overflow-x: auto; padding-top: 2px; }
+.heat { display: grid; gap: 2px; align-items: center; min-width: 380px; }
+.heat-h { font-size: 0.66rem; color: var(--text-3); white-space: nowrap; }
+.heat-d { font-size: 0.72rem; color: var(--text-2); font-weight: 600; }
+.heat-c { display: inline-block; height: 22px; border-radius: 4px; background: var(--surface-2); }
+.heat-c.none { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+.heat-c.few { background: repeating-linear-gradient(45deg, transparent 0 3px, var(--border) 3px 4px); box-shadow: inset 0 0 0 1px var(--border); }
+.heat-c.s0 { background: var(--heat-0); }
+.heat-c.s1 { background: var(--heat-1); }
+.heat-c.s2 { background: var(--heat-2); }
+.heat-c.s3 { background: var(--heat-3); }
+.heat [role="gridcell"]:hover, .heat [role="gridcell"]:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.heat-tip { position: absolute; transform: translate(-50%, calc(-100% - 6px)); background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 9px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px; pointer-events: none; white-space: nowrap;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); z-index: 5; }
+.heat-tip b { font-size: 0.9rem; color: var(--text); }
+.heat-tip span { color: var(--text-2); }
+.heat-legend { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 0.72rem; color: var(--text-3); margin-top: 8px; }
+.heat-legend .heat-c { width: 16px; height: 12px; }

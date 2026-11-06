@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import type { CallPick } from './engine';
 import { phoneKey, type QueueItem } from './queue';
 
 /**
@@ -21,6 +22,8 @@ export interface SessionItem {
   addedAt: string;
   /** Came in as a due follow-up: called even if the lead was disqualified. */
   followUp?: boolean;
+  /** Why the engine picked it (proven / experiment), recorded on the call. */
+  pick?: CallPick;
 }
 
 export interface CallSession {
@@ -49,7 +52,7 @@ export interface CallRec {
 }
 export type RecGetter = (type: CallType, id: string) => CallRec | undefined;
 
-export interface ViewItem { type: CallType; id: string; company: string; reason: string; manual: boolean }
+export interface ViewItem { type: CallType; id: string; company: string; reason: string; manual: boolean; pick: CallPick }
 
 export interface SessionView {
   current?: ViewItem;
@@ -113,7 +116,7 @@ export function resolveSession(s: CallSession, manual: ManualRef[], get: RecGett
     const rec = get(m.type, m.id);
     const why = dropReason(m.type, rec, m.queuedAt, dnc, true);
     if (why) { if (why !== 'called') removed.push({ id: m.id, company: rec?.company || '', reason: why }); continue; }
-    mine.push({ type: m.type, id: m.id, company: rec!.company || '', reason: 'My queue', manual: true });
+    mine.push({ type: m.type, id: m.id, company: rec!.company || '', reason: 'My queue', manual: true, pick: 'queue' });
   }
   const auto: ViewItem[] = [];
   const seen = new Set<string>();
@@ -123,7 +126,7 @@ export function resolveSession(s: CallSession, manual: ManualRef[], get: RecGett
     const rec = get(it.type, it.id);
     const why = dropReason(it.type, rec, it.addedAt, dnc, it.followUp);
     if (why) { if (why !== 'called') removed.push({ id: it.id, company: rec?.company || '', reason: why }); continue; }
-    auto.push({ type: it.type, id: it.id, company: rec!.company || '', reason: it.reason, manual: false });
+    auto.push({ type: it.type, id: it.id, company: rec!.company || '', reason: it.reason, manual: false, pick: it.followUp ? 'followup' : it.pick || 'proven' });
   }
   const all = [...mine, ...auto];
   const current = all.find((x) => x.id === s.currentId) || all[0];
@@ -138,13 +141,13 @@ export function resolveSession(s: CallSession, manual: ManualRef[], get: RecGett
 }
 
 /** The next calls to lock in: the top of the auto queue, minus anything shown, skipped or taken off. */
-export function nextBatch(auto: QueueItem[], s: CallSession, view: SessionView, now = new Date().toISOString(), size = BATCH_SIZE): SessionItem[] {
+export function nextBatch(auto: (QueueItem & { pick?: CallPick })[], s: CallSession, view: SessionView, now = new Date().toISOString(), size = BATCH_SIZE): SessionItem[] {
   const blocked = new Set([...view.visible, ...s.skipped, ...view.removed.map((r) => r.id)]);
   const out: SessionItem[] = [];
   for (const q of auto) {
     if (out.length >= size) break;
     if (blocked.has(q.id)) continue;
-    out.push({ type: q.type, id: q.id, reason: q.reason, addedAt: now, followUp: !!q.task });
+    out.push({ type: q.type, id: q.id, reason: q.reason, addedAt: now, followUp: !!q.task, ...(q.pick ? { pick: q.pick } : {}) });
   }
   return out;
 }

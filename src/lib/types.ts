@@ -121,6 +121,10 @@ export interface Activity extends BaseRecord {
   emailTo?: string;
   /** Incoming email: when you read it ('' = unread). */
   readAt?: string;
+  /** Calls: why it was called (proven / experiment / queue / followup; '' = outside Call Mode). */
+  pick?: string;
+  /** Calls: 'custom' if the business had its own script, else 'default'. */
+  scriptKind?: string;
 }
 
 export interface Task extends BaseRecord {

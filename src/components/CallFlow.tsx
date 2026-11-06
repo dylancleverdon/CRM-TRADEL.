@@ -14,7 +14,7 @@ import { serviceList, toggleService } from '../lib/services';
 import { getSetting, store } from '../lib/store';
 import { Field, Modal, toast } from './ui';
 
-interface PendingCall { entity: Entity; phone: string; startedAt: string; name: string }
+interface PendingCall { entity: Entity; phone: string; startedAt: string; name: string; pick?: string }
 
 /** Call Mode registers this so the outcome form can offer "Save and call next". */
 export interface NextHandler {
@@ -25,7 +25,8 @@ export interface NextHandler {
 }
 
 interface CallCtx {
-  startCall: (entity: Entity, phone?: string) => void;
+  /** `pick`: why Call Mode is calling it, recorded on the call. */
+  startCall: (entity: Entity, phone?: string, pick?: string) => void;
   logManual: (entity: Entity) => void;
   onLogged: (fn: (() => void) | null) => void;
   onNext: (h: NextHandler | null) => void;
@@ -58,10 +59,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
     return () => { h.then((x) => x.remove()); };
   }, []);
 
-  const startCall = useCallback(async (entity: Entity, phone?: string) => {
+  const startCall = useCallback(async (entity: Entity, phone?: string, pick?: string) => {
     const num = phone || entityPhone(entity.type, entity.id);
     if (!num) { toast('No phone number on this record'); return; }
-    const p: PendingCall = { entity, phone: num, startedAt: new Date().toISOString(), name: entityName(entity.type, entity.id) };
+    const p: PendingCall = { entity, phone: num, startedAt: new Date().toISOString(), name: entityName(entity.type, entity.id), ...(pick ? { pick } : {}) };
     localStorage.setItem(PENDING_KEY, JSON.stringify(p));
     setActive(p);
     if (isDesktop() && getDesktopCallMode() === 'phone') {
@@ -160,6 +161,7 @@ function OutcomeForm({ call, next, onDone, onCancel }: {
       followUp: followUp ? fromLocalInput(followUp) : null,
       followUpTitle: followTitle,
       startedAt: call.startedAt,
+      pick: call.pick,
     });
     toast(`Logged: ${outcome}`);
     saveCalledNumber(call.entity, call.phone, outcome).then((m) => m && toast(m));
