@@ -49,6 +49,15 @@ describe('Code.gs: sync key and lock', () => {
     expect(s.active.getSheetByName('leads')!.getRange(2, 1, 1, 2).getValues()[0]).toEqual(['L1', 'American First Air']);
   });
 
+  it('a ping sets up only what is missing: the key tab comes back if it was deleted', () => {
+    const s = loadCodeGs();
+    s.handle({ action: 'ping' });
+    const key = s.props.get('tl_syncKey')!;
+    s.active.deleteSheet(s.active.getSheetByName('🔒 Sync key')!);
+    expect(s.handle({ action: 'ping', key }).security.keyed).toBe(true);
+    expect(s.active.getSheetByName('🔒 Sync key')!.getRange('A3').getValue()).toBe(key);
+  });
+
   it('the public reset is gone', () => {
     const s = loadCodeGs();
     s.handle({ action: 'sync', since: 0, changes: { leads: [lead] } });

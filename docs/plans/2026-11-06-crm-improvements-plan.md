@@ -38,6 +38,11 @@ In scope: **1, 2, 6, 7, 9, 12, 15**. Everything else from the brainstorm is drop
 
 **CI.** The release sync check only pings once the CRM is locked; the code-reload step needs no key.
 
+**Follow-ups found after shipping (v1.0.29).**
+- An older deployment of the sheet's script (ID ending `…pK2oX-7A0w`) was still live, running pre-lock code that ignores the key and still has the public reset. Its link is in the public code. Dylan archives it in Apps Script → Manage deployments.
+- The email connector now follows the lock with the same key (checked with the sheet, stored only as a hash, re-checked every 10 minutes). A phone without the key can still receive it from the Mac.
+- The sheet's ping now sets up only what's missing (it used to reformat every tab).
+
 ## 2. Daily backups, keep 2
 
 - Two backup spreadsheets in Dylan's Drive, **CRM Tradelink Backup – A** and **– B**.

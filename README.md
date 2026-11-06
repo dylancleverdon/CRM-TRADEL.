@@ -43,6 +43,12 @@ The sync link is in this public code, so your sheet also has a private **sync ke
 
 If you lose the key, it's always in that tab. To unlock, open Apps Script → Project Settings → Script properties and delete `tl_locked`.
 
+**Old sync links:** every deployment of the sheet's script has its own link, and an old one keeps running the code it was deployed with, without the lock. In Apps Script → Deploy → Manage deployments, keep only the one the app uses (its ID ends in `…WLRacC4Jw`) and archive the rest.
+
+**Email connector:** it follows the lock by itself. Once your CRM is locked, the connector (Gmail, and texts and contacts sent through your phone) also needs the key. It checks keys with your sheet and keeps only a hash, so a new key there takes over within 10 minutes and the old one stops working. A phone without the key can still receive it from the Mac (Send key to my phone), and nothing else. Settings → Security & backups shows whether it's locked.
+
+**New key** (e.g. a lost phone): in Apps Script → Project Settings → Script properties, delete `tl_syncKey`. A new key appears in the 🔒 Sync key tab at the next sync; save it on your devices again.
+
 **Backups:** the sheet keeps two copies in your Drive, *CRM Tradelink Backup – A* and *– B*. They're refreshed on alternating days at the first sync of the day, so you always have the last two days. Settings shows when the last backup ran, with links to both copies.
 
 ## Lead Finder (public records)

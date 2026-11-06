@@ -19,6 +19,7 @@ const mem = vi.hoisted(() => {
   return m;
 });
 
+import { connectorCall, connectEmail, CONNECTOR_LOCKED } from '../email';
 import { getSyncKey, saveSyncKey, setSyncKey, testConnection, withAuth } from '../sync';
 
 const KEY = 'a'.repeat(64);
@@ -49,5 +50,26 @@ describe('sync key on this device', () => {
     net.reply = () => ({ ok: true, sheet: 'CRM Tradelink Data Storage', security: { locked: true, keyed: true } });
     await testConnection('https://script.google.com/macros/s/X/exec');
     expect(net.bodies[0]).toMatchObject({ action: 'ping', key: KEY });
+  });
+});
+
+describe('email connector and the sync key', () => {
+  beforeEach(() => { mem.clear(); net.bodies = []; });
+
+  it('every connector request carries the key once it is saved, without touching what is sent', async () => {
+    net.reply = () => ({ ok: true });
+    await connectorCall({ action: 'recent', since: 5 }, 'https://script.google.com/macros/s/E/exec');
+    expect(net.bodies[0].auth).toBeUndefined();
+    setSyncKey(KEY);
+    await connectorCall({ action: 'keyRequest', key: 'b'.repeat(64) }, 'https://script.google.com/macros/s/E/exec');
+    expect(net.bodies[1]).toEqual({ action: 'keyRequest', key: 'b'.repeat(64), auth: KEY });
+  });
+
+  it('a locked connector says what to do', async () => {
+    net.reply = () => ({ ok: false, code: 'locked', error: 'This email connector is locked.' });
+    await expect(connectorCall({ action: 'recent' }, 'https://script.google.com/macros/s/E/exec')).rejects.toThrow(CONNECTOR_LOCKED);
+    net.reply = () => ({ ok: true, locked: true, keyed: false, version: '1.0.29' });
+    await expect(connectEmail('https://script.google.com/macros/s/E/exec')).rejects.toThrow(/Settings → Security/);
+    expect(localStorage.getItem('tl.emailUrl')).toBeNull();
   });
 });

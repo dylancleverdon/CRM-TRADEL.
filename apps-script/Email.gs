@@ -13,8 +13,15 @@
  *             save people to the phone's contacts, or take the sheet's sync key. This goes through this
  *             connector (its URL is private to your devices) rather than the sheet's public sync URL.
  * Messages are returned to the CRM app; only emails matching a CRM lead/contact are saved by the app.
+ *
+ * Once the CRM's Google Sheet is locked, this connector needs the same sync key: it asks the sheet whether a key
+ * is right (so a new key there is picked up by itself) and keeps only a hash of it.
  */
 var TL_EMAIL_VERSION = '__CODE_VERSION__';
+
+/** The CRM's Google Sheet, which knows the sync key. A script property tl_sheetUrl overrides it. */
+var TL_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwfcYLWddHT-9JJ4-TcWJkTucaQUzKsQ8aAp5hg_jbyrlSYC5B16ZOxMZfd9WLRacC4Jw/exec';
+var TL_LOCKED_MSG = 'This email connector is locked. Save your sync key on this device: Settings → Security & backups.';
 
 function doGet(e) {
   var p = (e && e.parameter) || {};
@@ -38,7 +45,16 @@ function tlEmailHandle_(b) {
       if (typeof tlFetch_ !== 'function') return { ok: false, error: 'Not running through the auto-update loader' };
       return { ok: true, reloaded: true, bytes: tlFetch_().length };
     }
-    if (b.action === 'ping') return { ok: true, email: tlMe_(), version: TL_EMAIL_VERSION, quota: MailApp.getRemainingDailyQuota() };
+    var auth = tlAuth_(b);
+    if (b.action === 'ping') {
+      if (!auth.ok) return { ok: true, locked: true, keyed: false, version: TL_EMAIL_VERSION };
+      return { ok: true, email: tlMe_(), version: TL_EMAIL_VERSION, quota: MailApp.getRemainingDailyQuota(), locked: auth.locked, keyed: auth.keyed };
+    }
+    if (!auth.ok) {
+      // A phone without the key can still receive it from your Mac ("Send key to my phone"), and nothing else.
+      if (b.action === 'textPoll' && b.phone) return tlKeyOnlyPoll_();
+      return { ok: false, code: 'locked', error: TL_LOCKED_MSG };
+    }
     if (b.action === 'recent') return tlRecent_(b);
     if (b.action === 'search') return tlSearch_(b);
     if (b.action === 'send') return tlSend_(b);
@@ -53,6 +69,73 @@ function tlEmailHandle_(b) {
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
   }
+}
+
+// ---------------------------------------------------------------- lock (the sheet's sync key)
+
+function tlHash_(s) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8);
+  return bytes.map(function (x) { var v = (x < 0 ? x + 256 : x).toString(16); return v.length < 2 ? '0' + v : v; }).join('');
+}
+
+/** What the sheet says about a key: { locked, keyed }, or null if it can't be asked right now. Cached 10 minutes. */
+function tlAskSheet_(key, cacheKey) {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get(cacheKey);
+  if (hit) return JSON.parse(hit);
+  // At most 10 questions per 10 minutes, so made-up keys can't use up the daily quota.
+  var slot = 'tl_asks_' + Math.floor(Date.now() / 600000);
+  var n = Number(cache.get(slot) || 0);
+  if (n >= 10) return null;
+  cache.put(slot, String(n + 1), 600);
+  var url = PropertiesService.getScriptProperties().getProperty('tl_sheetUrl') || TL_SHEET_URL;
+  var r = null;
+  try {
+    var res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'text/plain;charset=utf-8', followRedirects: true, muteHttpExceptions: true,
+      payload: JSON.stringify({ action: 'ping', key: key || '' }) });
+    r = JSON.parse(res.getContentText());
+  } catch (e) { r = null; }
+  if (!r || !r.ok) return null;
+  var sec = r.security || r; // a locked sheet answers a wrong key with just { ok, locked, keyed }
+  var v = { locked: !!sec.locked, keyed: !!sec.keyed };
+  cache.put(cacheKey, JSON.stringify(v), 600);
+  return v;
+}
+
+/**
+ * Follows the sheet: open while the sheet is open; once it's locked, only requests carrying the sync key (b.auth).
+ * The sheet is asked about each key at most every 10 minutes, so a new key there takes over by itself (and the old
+ * one stops working). A confirmed key is remembered as a hash for when the sheet can't be reached.
+ */
+function tlAuth_(b) {
+  var props = PropertiesService.getScriptProperties();
+  var key = typeof b.auth === 'string' ? b.auth : '';
+  var h = key ? tlHash_(key) : '';
+  var locked = props.getProperty('tl_locked') === '1';
+  var known = !!h && h === props.getProperty('tl_keyHash');
+  var v = tlAskSheet_(key, 'tl_auth_' + (h || 'none'));
+  if (!v) return { ok: known || !locked, locked: locked, keyed: known }; // can't ask the sheet: keep the current rule
+  if (v.locked !== locked) {
+    if (v.locked) props.setProperty('tl_locked', '1'); else props.deleteProperty('tl_locked');
+    locked = v.locked;
+  }
+  if (v.keyed && h) {
+    if (!known) props.setProperty('tl_keyHash', h);
+    return { ok: true, locked: locked, keyed: true };
+  }
+  if (known) props.deleteProperty('tl_keyHash'); // the sheet has a different key now
+  return { ok: !locked, locked: locked, keyed: false };
+}
+
+/** For a phone that doesn't have the key yet: only a pending "take the sync key" request, nothing else. */
+function tlKeyOnlyPoll_() {
+  var props = PropertiesService.getScriptProperties();
+  var now = Date.now();
+  props.setProperty('tl_phoneSeen', String(now));
+  var kreq = null;
+  try { kreq = JSON.parse(props.getProperty('tl_keyRequest') || 'null'); } catch (e) { kreq = null; }
+  if (kreq && now - kreq.at > 120000) { props.deleteProperty('tl_keyRequest'); kreq = null; }
+  return { ok: true, locked: true, serverTime: now, keyReq: kreq };
 }
 
 function tlMe_() {

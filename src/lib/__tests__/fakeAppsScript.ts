@@ -2,7 +2,7 @@
  * A small in-memory stand-in for the Apps Script services Code.gs uses (SpreadsheetApp, PropertiesService,
  * LockService, Utilities), so the real server code can be tested without Google.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
@@ -123,5 +123,58 @@ export function loadCodeGs() {
   vm.createContext(ctx);
   vm.runInContext(readFileSync(resolve(__dirname, '../../../apps-script/Code.gs'), 'utf8'), ctx);
   env.handle = (body: any) => JSON.parse(JSON.stringify(ctx.handle_(body)));
+  return env;
+}
+
+/** The email connector (Email.gs) with a stand-in for the CRM's sheet, which it asks about sync keys. */
+export function loadEmailGs() {
+  const props = new Map<string, string>();
+  const cache = new Map<string, string>();
+  const env = {
+    props,
+    cache,
+    /** What the sheet knows: its key, whether it's locked, whether it can be reached. */
+    sheet: { key: 'k'.repeat(64), locked: false, down: false },
+    fetches: 0,
+    handle: (_body: any): any => null,
+  };
+  const ctx: any = {
+    console,
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (k: string) => (props.has(k) ? props.get(k)! : null),
+        setProperty: (k: string, v: string) => { props.set(k, String(v)); },
+        deleteProperty: (k: string) => { props.delete(k); },
+        setProperties: (o: Record<string, string>) => Object.entries(o).forEach(([k, v]) => props.set(k, String(v))),
+      }),
+    },
+    CacheService: { getScriptCache: () => ({ get: (k: string) => cache.get(k) ?? null, put: (k: string, v: string) => { cache.set(k, String(v)); } }) },
+    Utilities: {
+      getUuid: () => randomUUID(),
+      DigestAlgorithm: { SHA_256: 'sha256' },
+      Charset: { UTF_8: 'utf8' },
+      // Like Apps Script: an array of signed bytes.
+      computeDigest: (alg: string, s: string) => Array.from(createHash(alg).update(s, 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b)),
+    },
+    UrlFetchApp: {
+      fetch: (_url: string, opts: any) => {
+        env.fetches++;
+        if (env.sheet.down) throw new Error('Address unavailable');
+        const b = JSON.parse(opts.payload);
+        const keyed = !!b.key && b.key === env.sheet.key;
+        // Same answers as Code.gs's ping.
+        const r = env.sheet.locked && !keyed ? { ok: true, locked: true, keyed: false, codeVersion: '1.0.28' }
+          : { ok: true, serverTime: Date.now(), codeVersion: '1.0.28', security: { locked: env.sheet.locked, keyed, sheetUrl: 'https://docs.google.com/x' } };
+        return { getContentText: () => JSON.stringify(r), getResponseCode: () => 200 };
+      },
+    },
+    Session: { getEffectiveUser: () => ({ getEmail: () => 'Dylan@tradelink.marketing' }) },
+    MailApp: { getRemainingDailyQuota: () => 1500 },
+    GmailApp: { search: () => [] },
+    ContentService: { createTextOutput: (t: string) => ({ setMimeType: () => t }), MimeType: { JSON: 'json' } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(resolve(__dirname, '../../../apps-script/Email.gs'), 'utf8'), ctx);
+  env.handle = (body: any) => JSON.parse(JSON.stringify(ctx.tlEmailHandle_(body)));
   return env;
 }

@@ -6,6 +6,7 @@ import { useSyncExternalStore } from 'react';
 import { emailsIn, buildPeopleIndex, isUnreadEmail, matchMessages, normEmail, type EmailMessage, type Person } from './emailmatch';
 import { httpRequest, isDesktop } from './platform';
 import { getSetting, nowIso, store } from './store';
+import { getSyncKey } from './sync';
 import type { EntityType } from './types';
 
 const LS_URL = 'tl.emailUrl';
@@ -41,19 +42,24 @@ export const getEmailUrl = () => localStorage.getItem(LS_URL) || '';
 export const emailConnected = () => !!getEmailUrl();
 
 /** A request to the private email connector (also used for follow-up texts). */
+export const CONNECTOR_LOCKED = 'Your email connector is locked to your sync key. Save the key on this device: Settings → Security & backups.';
+
+/** Calls your private email connector. Sends the sheet's sync key too: once the CRM is locked, the connector needs it. */
 export async function connectorCall(body: unknown, url = getEmailUrl()) {
-  const res = await httpRequest(url, 'POST', JSON.stringify(body));
+  const key = getSyncKey();
+  const res = await httpRequest(url, 'POST', JSON.stringify({ ...(body as object), ...(key ? { auth: key } : {}) }));
   let parsed: any;
   try { parsed = JSON.parse(res.text); } catch {
     if (/accounts\.google|sign in/i.test(res.text)) throw new Error('Google asked for sign-in. Redeploy the email connector with "Who has access: Anyone".');
     throw new Error(`Unexpected response from the email connector (HTTP ${res.status}).`);
   }
-  if (!parsed.ok) throw new Error(parsed.error || 'Email request failed');
+  if (!parsed.ok) throw new Error(parsed.code === 'locked' ? CONNECTOR_LOCKED : parsed.error || 'Email request failed');
   return parsed;
 }
 
 export async function connectEmail(url: string) {
   const r = await connectorCall({ action: 'ping' }, url.trim());
+  if (r.locked && !r.keyed) throw new Error(CONNECTOR_LOCKED);
   localStorage.setItem(LS_URL, url.trim());
   localStorage.setItem('tl.emailMe', r.email);
   set({ status: 'idle', me: r.email, error: '' });

@@ -1,11 +1,12 @@
 import { Check, Copy, Download, Eye, EyeOff, Lock, RefreshCw, Smartphone, Upload } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import scriptCode from '../../apps-script/Loader.gs?raw';
 import { CallingSettings } from '../components/DeskPhone';
 import { Page } from '../components/Layout';
 import { Field, InlineInput, toast } from '../components/ui';
 import { DEFAULT_GOALS, DEFAULT_SCRIPT, DEFAULT_SERVICES, DEFAULT_STAGES, DEFAULT_TRADES, GITHUB_REPO, type StageDef } from '../lib/constants';
 import { ago } from '../lib/format';
+import { connectorCall, emailConnected } from '../lib/email';
 import { DEFAULT_CONTACT_ACCOUNT, getContactSave, setContactSave, type ContactSaveMode } from '../lib/phonecontacts';
 import { DEFAULT_FOLLOW_UP_TEXT, TEXT_PLACEHOLDERS } from '../lib/texts';
 import { isAndroid, isDesktop, Native, openExternal, platformName } from '../lib/platform';
@@ -101,6 +102,7 @@ function SecuritySettings() {
             ))}
           </div>
         )}
+        {sec && <ConnectorLock crmLocked={sec.locked} />}
         {backups && (
           <div style={{ fontSize: '0.84rem' }}>
             <b>Backups</b> <span className="faint">· two copies in your Drive, refreshed on alternating days</span>
@@ -114,6 +116,28 @@ function SecuritySettings() {
       </div>
     </div>
   );
+}
+
+/** Your email connector (Gmail, and texts/contacts sent through your phone) follows the CRM's lock with the same key. */
+function ConnectorLock({ crmLocked }: { crmLocked: boolean }) {
+  const [st, setSt] = useState<{ locked?: boolean; keyed?: boolean; old?: boolean; error?: string } | null>(null);
+  useEffect(() => {
+    if (!emailConnected()) return;
+    let live = true;
+    connectorCall({ action: 'ping' })
+      .then((r) => live && setSt({ locked: !!r.locked, keyed: !!r.keyed, old: r.locked === undefined }))
+      .catch((e) => live && setSt({ error: e?.message || String(e) }));
+    return () => { live = false; };
+  }, [crmLocked]);
+  if (!st) return null;
+  const line = (pill: string, label: string, text: string) => (
+    <div className="row wrap" style={{ gap: 6, fontSize: '0.84rem' }}><span className={`pill ${pill}`}>{label}</span><span className="faint">{text}</span></div>
+  );
+  if (st.error) return line('bad', 'Email connector', st.error);
+  if (st.locked && st.keyed) return line('good', 'Email connector locked', 'Gmail, texts and contacts through your phone need the key too');
+  if (st.locked) return line('bad', 'Email connector locked', "this device doesn't have the key yet");
+  if (st.old) return line('warn', 'Email connector', 'updating itself to the version that locks with your key (within 10 minutes)');
+  return line('warn', 'Email connector not locked yet', crmLocked ? 'it locks itself within 10 minutes' : 'it locks together with your CRM');
 }
 
 function SyncSettings() {

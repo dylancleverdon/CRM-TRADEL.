@@ -47,7 +47,7 @@ var CODE_VERSION = '__CODE_VERSION__'; // stamped with the release version by CI
 function ensureSetup_() {
   var props = PropertiesService.getScriptProperties();
   var ss = SpreadsheetApp.getActive();
-  var missing = Object.keys(TABLES).some(function (n) { return !ss.getSheetByName(n); });
+  var missing = !ss.getSheetByName(KEY_TAB) || Object.keys(TABLES).some(function (n) { return !ss.getSheetByName(n); });
   if (missing || props.getProperty('setup') !== SETUP_VERSION) {
     setup();
     props.setProperty('setup', SETUP_VERSION);
@@ -86,7 +86,7 @@ function handle_(body) {
     noteDevice_(body, keyed);
     if (body.action === 'ping') {
       if (locked && !keyed) return { ok: true, locked: true, keyed: false, codeVersion: CODE_VERSION };
-      setup();
+      ensureSetup_(); // only what is missing: the email connector checks keys with a ping
       return { ok: true, serverTime: Date.now(), tables: Object.keys(TABLES), sheet: SpreadsheetApp.getActive().getName(),
         codeVersion: CODE_VERSION, loader: typeof TL_CODE_URL !== 'undefined', security: securityInfo_(keyed) };
     }
