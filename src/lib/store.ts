@@ -24,6 +24,8 @@ export function normalize(rec: Record<string, any>): AnyRec {
   return out as AnyRec;
 }
 
+const isBlank = (v: unknown) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+
 class Store {
   data: Record<TableName, Map<string, AnyRec>> = Object.fromEntries(TABLES.map((t) => [t, new Map()])) as any;
   dirty: Record<TableName, Set<string>> = Object.fromEntries(TABLES.map((t) => [t, new Set()])) as any;
@@ -41,7 +43,34 @@ class Store {
 
   setVirtualLeads(map: Map<string, AnyRec>) {
     this.virtualLeads = map;
+    this.repairLeads();
     this.emit();
+  }
+
+  /**
+   * Leads that lost their details (a device saved a partial copy of a Lead Finder business it didn't have): fill
+   * the blanks back in from Lead Finder and sync the repaired lead. Returns how many were repaired.
+   */
+  repairLeads(): number {
+    let n = 0;
+    for (const [id, l] of this.data.leads) {
+      const v = this.virtualLeads.get(id);
+      if (!v || l.deleted || String(l.company || '').trim()) continue;
+      const fixed: AnyRec = { ...l };
+      for (const [k, val] of Object.entries(v)) if (isBlank(fixed[k]) && !isBlank(val)) fixed[k] = val;
+      fixed.updatedAt = nowIso();
+      this.data.leads.set(id, fixed);
+      this.dirty.leads.add(id);
+      for (const a of this.data.activities.values()) {
+        if (a.entityId === id && (!a.entityName || a.entityName === 'Lead')) {
+          this.data.activities.set(a.id, { ...a, entityName: fixed.company, updatedAt: nowIso() });
+          this.dirty.activities.add(a.id);
+        }
+      }
+      n++;
+    }
+    if (n) { this.scheduleSave(); this.onLocalChange?.(); }
+    return n;
   }
 
   async load() {
@@ -101,6 +130,12 @@ class Store {
   upsert<T extends TableName>(t: T, rec: Partial<RecordMap[T]> & { id?: string }): RecordMap[T] {
     const id = rec.id || uid();
     const existing = this.data[t].get(id) || (t === 'leads' ? this.virtualLeads.get(id) : undefined);
+    // An update for a lead/contact this device doesn't have (e.g. a Lead Finder business not loaded here) must not
+    // create a nameless copy: that copy would sync and blank out the real one.
+    if (!existing && rec.id && (t === 'leads' || t === 'contacts') && isBlank((rec as AnyRec).company)) {
+      console.warn(`Ignored an update for a ${t.slice(0, -1)} this device doesn't have: ${id}`);
+      return { ...(rec as AnyRec), id } as any;
+    }
     const ts = nowIso();
     const base: AnyRec = existing ? { ...existing } : ({} as AnyRec);
     if (!base.createdAt) base.createdAt = ts;
@@ -125,6 +160,18 @@ class Store {
       const rec = normalize(raw);
       const local = this.data[t].get(rec.id);
       if (local && this.dirty[t].has(rec.id) && (local.updatedAt || '') > (rec.updatedAt || '')) continue;
+      const known = local || (t === 'leads' ? this.virtualLeads.get(rec.id) : undefined);
+      if ((t === 'leads' || t === 'contacts') && known && isBlank(rec.company) && !isBlank(known.company)) {
+        // A nameless (partial) copy from another device: keep what we know, take only what it adds, and send the
+        // full record back so the sheet is repaired too.
+        const merged: AnyRec = { ...known };
+        for (const [k, v] of Object.entries(rec)) if (!isBlank(v)) merged[k] = v;
+        merged.updatedAt = nowIso();
+        this.data[t].set(rec.id, merged);
+        this.dirty[t].add(rec.id);
+        changed = true;
+        continue;
+      }
       this.data[t].set(rec.id, { ...(local || {}), ...rec });
       changed = true;
     }

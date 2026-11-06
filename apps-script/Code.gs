@@ -336,9 +336,14 @@ function sync_(body) {
             return;
           }
         }
+        // A lead/contact arriving without its name is a partial record from a device that didn't have it:
+        // it must never blank out what the sheet already has.
+        var compCol = headers.indexOf('company');
+        var keepFilled = (name === 'leads' || name === 'contacts') && pos !== undefined && compCol >= 0 &&
+          !String(rec.company || '').trim() && String(data[pos][compCol] || '').trim() !== '';
         var row = headers.map(function (h, ci) {
           if (h === '_serverTime') return String(now);
-          if (rec.hasOwnProperty(h)) return valueToCell_(rec[h]);
+          if (rec.hasOwnProperty(h) && !(keepFilled && (rec[h] === '' || rec[h] == null))) return valueToCell_(rec[h]);
           return pos !== undefined ? data[pos][ci] : '';
         });
         if (pos !== undefined) {

@@ -118,7 +118,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 textarea { resize: vertical; min-height: 70px; line-height: 1.45; }
-input[type='checkbox'] { width: 17px; height: 17px; accent-color: var(--accent); padding: 0; flex: none; }
+input[type='checkbox'], input[type='radio'] { width: 17px; height: 17px; min-width: 17px; accent-color: var(--accent); padding: 0; margin: 0; flex: none; box-shadow: none; cursor: pointer; }
 label.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: var(--text-2); }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
 .form-grid .full { grid-column: 1 / -1; }

@@ -76,10 +76,14 @@ export async function placeCall(phone: string): Promise<void> {
  * Opens a web page next to the CRM so it stays visible during a call: a window docked beside the app on the Mac,
  * an in-app browser tab on Android (back returns to the call), a new tab in a browser.
  */
+const hostOf = (url: string) => { try { return new URL(url).hostname; } catch { return ''; } };
+
 export async function openBeside(url: string): Promise<void> {
   if (isDesktop()) {
     const d = window.tradelinkDesktop!;
-    await (d.openSide ? d.openSide(url) : d.openExternal(url));
+    // Yelp's bot check blocks the docked app window, so Yelp opens in your normal browser.
+    const toBrowser = /(^|\.)yelp\.com$/i.test(hostOf(url));
+    await (d.openSide && !toBrowser ? d.openSide(url) : d.openExternal(url));
     return;
   }
   if (isAndroid()) {
